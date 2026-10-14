@@ -1,0 +1,1216 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Toolbench</title>
+<style>
+  /* Layout: fixed sidebar (search + categorized tool list) beside a scrollable work pane; collapses to stacked header + full-width pane under 760px. */
+  :root{
+    --bg:#eceff3; --surface:#ffffff; --surface-2:#f4f6f9; --surface-3:#eaedf1;
+    --border:#d7dde4; --border-strong:#c3ccd5;
+    --fg:#16202b; --muted:#5c6b7a; --faint:#8a97a4;
+    --accent:#0d9488; --accent-2:#0f766e; --accent-fg:#ffffff; --accent-wash:#e3f4f1;
+    --good:#15803d; --warn:#b45309; --bad:#dc2626;
+    --radius:10px; --radius-sm:7px;
+    --shadow:0 1px 2px rgba(16,32,48,.06), 0 6px 20px rgba(16,32,48,.06);
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --bg:#0d1117; --surface:#161b22; --surface-2:#1b222c; --surface-3:#222b36;
+    --border:#2a333e; --border-strong:#3a4552;
+    --fg:#e6edf3; --muted:#93a1b0; --faint:#6b7a89;
+    --accent:#2dd4bf; --accent-2:#5eead4; --accent-fg:#06211e; --accent-wash:#12302c;
+    --good:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0d1117; --surface:#161b22; --surface-2:#1b222c; --surface-3:#222b36;
+    --border:#2a333e; --border-strong:#3a4552;
+    --fg:#e6edf3; --muted:#93a1b0; --faint:#6b7a89;
+    --accent:#2dd4bf; --accent-2:#5eead4; --accent-fg:#06211e; --accent-wash:#12302c;
+    --good:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  button,input,select,textarea{font:inherit;color:inherit}
+  a{color:var(--accent-2)}
+  h1,h2,h3{text-wrap:balance;margin:0}
+
+  .app{height:100%;display:grid;grid-template-columns:304px 1fr;overflow:hidden}
+
+  /* Sidebar */
+  .side{display:flex;flex-direction:column;min-height:0;background:var(--surface);border-right:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:10px;padding:16px max(16px,env(safe-area-inset-left,0px)) 12px;border-bottom:1px solid var(--border)}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);display:grid;place-items:center;color:var(--accent-fg);flex:none}
+  .brand .logo svg{width:16px;height:16px}
+  .brand .name{font-weight:600;letter-spacing:.2px;font-size:15px}
+  .brand .count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:20px}
+  .searchwrap{padding:12px max(12px,env(safe-area-inset-left,0px));position:relative}
+  .searchwrap svg{position:absolute;left:calc(max(12px,env(safe-area-inset-left,0px)) + 11px);top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--faint);pointer-events:none}
+  .search{width:100%;padding:9px 12px 9px 34px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);outline:none}
+  .search:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+  .toollist{flex:1;overflow:auto;min-height:0;padding:4px max(8px,env(safe-area-inset-left,0px)) 24px}
+  .cat{margin-top:10px}
+  .cat>.lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:8px 10px 4px}
+  .titem{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 11px;font-size:15px;border:none;background:none;border-radius:var(--radius-sm);cursor:pointer;color:var(--fg)}
+  .titem:hover{background:var(--surface-2)}
+  .titem.active{background:var(--accent-wash);color:var(--accent-2);font-weight:600}
+  .titem .ti{width:15px;height:15px;color:var(--muted);flex:none}
+  .titem.active .ti{color:var(--accent-2)}
+  .titem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .noresult{padding:16px 12px;color:var(--muted);font-size:13px}
+
+  /* Main */
+  .main{min-height:0;overflow:auto;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px max(18px,env(safe-area-inset-right,0px)) 12px max(18px,env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--surface) 86%, transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .back{display:none;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;color:var(--fg)}
+  .topbar .tt{min-width:0}
+  .topbar .tt h2{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar .tt p{margin:1px 0 0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .theme{margin-left:auto;flex:none;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+  .theme svg{width:17px;height:17px}
+  .content{padding:20px max(18px,env(safe-area-inset-right,0px)) 60px max(18px,env(safe-area-inset-left,0px));flex:1}
+  .pane{max-width:880px;margin:0 auto}
+
+  /* Overview grid */
+  .ov-head{max-width:980px;margin:0 auto 18px}
+  .ov-head h1{font-size:22px;font-weight:600}
+  .ov-head p{color:var(--muted);margin:6px 0 0;max-width:60ch}
+  .ovcat{max-width:980px;margin:0 auto 26px}
+  .ovcat>.lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .ovtabs{display:flex;gap:8px;flex-wrap:wrap;max-width:980px;margin:0 auto 20px}
+  .ovtab{padding:10px 18px;border:1px solid var(--border);border-radius:24px;background:var(--surface);cursor:pointer;font-weight:600;font-size:14.5px;white-space:nowrap;color:var(--fg)}
+  .ovtab:hover{border-color:var(--accent)}
+  .ovtab.on{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+  .card{display:flex;align-items:flex-start;gap:12px;text-align:left;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .12s,transform .12s,box-shadow .12s}
+  .card:hover{border-color:var(--accent);box-shadow:var(--shadow);transform:translateY(-1px)}
+  .card .ci{width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;color:var(--accent-2);flex:none}
+  .card .ci svg{width:17px;height:17px}
+  .card .cb{min-width:0}
+  .card .cb b{font-weight:600;font-size:15px;display:block}
+  .card .cb small{color:var(--muted);font-size:13px;display:block;margin-top:3px;line-height:1.4}
+  .card .ci{width:38px;height:38px}
+  .card .ci svg{width:19px;height:19px}
+
+  /* Tool UI primitives */
+  .field{margin-bottom:12px}
+  .field>label{display:block;font-size:13.5px;font-weight:600;color:var(--muted);margin-bottom:6px;letter-spacing:.01em}
+  .field{margin-bottom:16px}
+  .inp,textarea.inp,select.inp{width:100%;padding:13px 15px;font-size:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-variant-numeric:tabular-nums}
+  textarea.inp{resize:vertical;min-height:120px;font-family:var(--mono);line-height:1.55}
+  .inp:focus,textarea.inp:focus,select.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+  .inp.mono{font-family:var(--mono)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:140px}
+  .row3>*{min-width:110px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 22px;font-size:16px;background:var(--accent);color:var(--accent-fg);border:1px solid transparent;border-radius:var(--radius-sm);font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--accent-2)}
+  .btn.ghost{background:var(--surface-2);color:var(--fg);border-color:var(--border)}
+  .btn.ghost:hover{background:var(--surface-3);border-color:var(--border-strong)}
+  .btn.sm{padding:9px 15px;font-size:14px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 14px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{padding:9px 15px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:14.5px}
+  .chip.on{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-2);font-weight:600}
+
+  .out{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:4px}
+  .out.mono{font-family:var(--mono);white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.55}
+  .outhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px}
+  .outhead .lbl{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .big{font-family:var(--mono);font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1.1}
+  .big.sm{font-size:28px}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:15px}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;padding:9px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;gap:8px}
+  .note svg{width:15px;height:15px;flex:none;margin-top:1px;color:var(--faint)}
+  .err{color:var(--bad)} .ok{color:var(--good)} .wn{color:var(--warn)}
+  .copy{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+  .copy:hover{border-color:var(--accent);color:var(--accent-2)}
+  .copy svg{width:13px;height:13px}
+
+  table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
+  table.tbl th,table.tbl td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border)}
+  table.tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  table.tbl td.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+  .scrollx{overflow-x:auto}
+
+  .calcpad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .calcpad button{padding:19px 0;font-size:19px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .calcpad button:hover{background:var(--surface-2)}
+  .calcpad button.op{color:var(--accent-2);font-weight:600}
+  .calcpad button.eq{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+  .calcpad button.fn{font-size:13px;color:var(--muted)}
+  .calcdisp{text-align:right;font-family:var(--mono);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+  .calcdisp .expr{color:var(--muted);font-size:13px;min-height:16px;word-break:break-all}
+  .calcdisp .res{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:4px;word-break:break-all}
+
+  .swatch{display:inline-block;width:100%;height:60px;border-radius:var(--radius-sm);border:1px solid var(--border)}
+  .pal{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+  .pal .c{height:88px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;cursor:pointer;font-family:var(--mono);font-size:11px}
+
+  .filedrop{border:2px dashed var(--border-strong);border-radius:var(--radius);padding:26px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2)}
+  .filedrop.over{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-2)}
+  .pagelist{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+  .pagerow{display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .pagerow .pn{font-family:var(--mono);color:var(--muted);width:42px;flex:none}
+  .pagerow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pagerow button{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;color:var(--muted)}
+  .pagerow button:hover{border-color:var(--accent);color:var(--accent-2)}
+
+  .flash{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:13px;font-weight:500;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50}
+  .flash.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+  @media (max-width:760px){
+    .app{grid-template-columns:1fr}
+    .side{border-right:none}
+    .main{display:none}
+    .app.viewing .side{display:none}
+    .app.viewing .main{display:flex}
+    .back{display:inline-flex}
+    .theme.mobtop{margin-left:auto}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app" id="app">
+  <aside class="side">
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span class="name">Toolbench</span>
+      <span class="count" id="count">0</span>
+    </div>
+    <div class="searchwrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input class="search" id="search" placeholder="Search 90 tools…" autocomplete="off" spellcheck="false">
+    </div>
+    <nav class="toollist" id="toollist"></nav>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="topbar">
+      <button class="back" id="back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>All tools</button>
+      <div class="tt" id="tooltitle" hidden><h2 id="tt-name"></h2><p id="tt-desc"></p></div>
+      <button class="theme" id="theme" title="Toggle theme"></button>
+    </div>
+    <div class="content"><div id="view"></div></div>
+  </main>
+</div>
+<div class="flash" id="flash"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+"use strict";
+/* ---------- helpers ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const view = $('#view');
+const flashEl = $('#flash');
+let flashTimer;
+function flash(msg){ flashEl.textContent=msg; flashEl.classList.add('show'); clearTimeout(flashTimer); flashTimer=setTimeout(()=>flashEl.classList.remove('show'),1400); }
+function fmt(n,d=6){ if(!isFinite(n)) return String(n); const r=Number(n.toFixed(d)); return r.toLocaleString(undefined,{maximumFractionDigits:d}); }
+function fmt2(n){ return Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+async function copyText(t,btn){
+  const ok=()=>{ if(btn){const o=btn.innerHTML; btn.innerHTML='✓ Copied'; setTimeout(()=>btn.innerHTML=o,1200);} flash('Copied to clipboard'); };
+  try{ await navigator.clipboard.writeText(t); ok(); }
+  catch{ try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); ok(); }catch{ flash('Copy failed — select manually'); } }
+}
+function download(name,data,mime='application/octet-stream'){
+  try{
+    const blob = data instanceof Blob ? data : new Blob([data],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    flash('Download started');
+  }catch(e){ flash('Download blocked in preview — works when self-hosted'); }
+}
+// delegated copy buttons: data-copy="#id" or data-copy-val from textContent
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-copy]'); if(!b) return;
+  const sel=b.getAttribute('data-copy');
+  const src=sel.startsWith('#')?$(sel):null;
+  const t = src ? (('value' in src && src.value!==undefined && src.tagName!=='DIV')?src.value:src.textContent) : sel;
+  copyText(t,b);
+});
+const COPYSVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+function copyBtn(sel,label='Copy'){ return `<button class="copy" data-copy="${sel}">${COPYSVG}${label}</button>`; }
+
+/* ---------- expression evaluator (scientific) ---------- */
+function makeEval(angle='rad'){
+  const toR = x => angle==='deg'? x*Math.PI/180 : x;
+  const fromR = x => angle==='deg'? x*180/Math.PI : x;
+  const CONST={pi:Math.PI,e:Math.E,tau:Math.PI*2,phi:(1+Math.sqrt(5))/2};
+  const FN={
+    sin:x=>Math.sin(toR(x)),cos:x=>Math.cos(toR(x)),tan:x=>Math.tan(toR(x)),
+    asin:x=>fromR(Math.asin(x)),acos:x=>fromR(Math.acos(x)),atan:x=>fromR(Math.atan(x)),
+    sinh:Math.sinh,cosh:Math.cosh,tanh:Math.tanh,
+    sqrt:Math.sqrt,cbrt:Math.cbrt,abs:Math.abs,ln:Math.log,log:Math.log10,log2:Math.log2,
+    exp:Math.exp,floor:Math.floor,ceil:Math.ceil,round:Math.round,sign:Math.sign,
+    fact:n=>{ if(n<0||n!==Math.floor(n))return NaN; let r=1; for(let i=2;i<=n;i++)r*=i; return r; }
+  };
+  function tokenize(s){
+    const t=[]; let i=0;
+    while(i<s.length){
+      const c=s[i];
+      if(/\s/.test(c)){i++;continue;}
+      if(/[0-9.]/.test(c)){ let j=i+1; while(j<s.length&&/[0-9.eE]/.test(s[j])){ if((s[j]==='e'||s[j]==='E')&&(s[j+1]==='+'||s[j+1]==='-'))j++; j++; } t.push({t:'num',v:parseFloat(s.slice(i,j))}); i=j; continue; }
+      if(/[a-zA-Z_]/.test(c)){ let j=i+1; while(j<s.length&&/[a-zA-Z0-9_]/.test(s[j]))j++; t.push({t:'id',v:s.slice(i,j).toLowerCase()}); i=j; continue; }
+      if('+-*/^%(),!'.includes(c)){ t.push({t:'op',v:c}); i++; continue; }
+      throw new Error('Unexpected "'+c+'"');
+    }
+    return t;
+  }
+  return function(src){
+    const tk=tokenize(src); let p=0;
+    const peek=()=>tk[p], eat=()=>tk[p++];
+    function parseExpr(){ let v=parseTerm(); while(peek()&&peek().t==='op'&&(peek().v==='+'||peek().v==='-')){ const o=eat().v; const r=parseTerm(); v=o==='+'?v+r:v-r; } return v; }
+    function parseTerm(){ let v=parseUnary(); while(peek()&&peek().t==='op'&&'*/%'.includes(peek().v)){ const o=eat().v; const r=parseUnary(); v=o==='*'?v*r:o==='/'?v/r:v%r; } return v; }
+    function parseUnary(){ if(peek()&&peek().t==='op'&&(peek().v==='-'||peek().v==='+')){ const o=eat().v; const v=parseUnary(); return o==='-'?-v:v; } return parsePow(); }
+    function parsePow(){ let b=parsePost(); if(peek()&&peek().t==='op'&&peek().v==='^'){ eat(); const e=parseUnary(); return Math.pow(b,e); } return b; }
+    function parsePost(){ let v=parsePrimary(); while(peek()&&peek().t==='op'&&peek().v==='!'){ eat(); v=FN.fact(v); } return v; }
+    function parsePrimary(){
+      const x=peek(); if(!x) throw new Error('Unexpected end');
+      if(x.t==='num'){ eat(); return x.v; }
+      if(x.t==='op'&&x.v==='('){ eat(); const v=parseExpr(); if(!peek()||peek().v!==')')throw new Error('Missing )'); eat(); return v; }
+      if(x.t==='id'){ eat(); const name=x.v;
+        if(peek()&&peek().t==='op'&&peek().v==='('){ eat(); const arg=parseExpr(); if(!peek()||peek().v!==')')throw new Error('Missing )'); eat(); if(!FN[name])throw new Error('Unknown fn '+name); return FN[name](arg); }
+        if(name in CONST) return CONST[name];
+        throw new Error('Unknown "'+name+'"');
+      }
+      throw new Error('Unexpected token');
+    }
+    const r=parseExpr(); if(p<tk.length) throw new Error('Unexpected "'+(tk[p].v)+'"'); return r;
+  };
+}
+
+/* ---------- icons (shared) ---------- */
+const I={
+  calc:'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10"/><line x1="12" y1="10" x2="12" y2="10"/><line x1="16" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="18"/><line x1="8" y1="18" x2="12" y2="18"/>',
+  convert:'<path d="M3 7h13l-3-3m3 3-3 3"/><path d="M21 17H8l3 3m-3-3 3-3"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  text:'<path d="M4 6h16M4 12h10M4 18h14"/>',
+  code:'<path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/>',
+  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  gen:'<path d="m12 3 2.1 4.9L19 10l-4.9 2.1L12 17l-2.1-4.9L5 10l4.9-2.1z"/>',
+  file:'<path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'
+};
+function ico(p){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`; }
+
+/* ---------- unit converter factory ---------- */
+function unitTool(units,defFrom,defTo,defVal){
+  return root=>{
+    const keys=Object.keys(units);
+    const opts=k=>keys.map(u=>`<option value="${u}"${u===k?' selected':''}>${units[u].label}</option>`).join('');
+    root.innerHTML=`
+      <div class="field"><label>Value</label><input class="inp" id="uv" type="number" value="${defVal}"></div>
+      <div class="row"><div class="field"><label>From</label><select class="inp" id="uf">${opts(defFrom)}</select></div>
+      <div class="field"><label>To</label><select class="inp" id="ut">${opts(defTo)}</select></div></div>
+      <button class="btn ghost sm" id="uswap">⇄ Swap</button>
+      <div class="out" style="margin-top:14px"><div class="outhead"><span class="lbl">Result</span>${copyBtn('#ures')}</div><div class="big sm" id="ures">—</div><div class="sub" id="uall"></div></div>`;
+    const calc=()=>{
+      const v=parseFloat($('#uv',root).value); const f=$('#uf',root).value,t=$('#ut',root).value;
+      if(!isFinite(v)){ $('#ures',root).textContent='—'; $('#uall',root).textContent=''; return; }
+      const base=units[f].to(v); const r=units[t].from(base);
+      $('#ures',root).textContent=fmt(r,8)+' '+units[t].sym;
+      $('#uall',root).innerHTML = keys.filter(k=>k!==t).slice(0,6).map(k=>`${units[k].sym} ${fmt(units[k].from(base),6)}`).join(' · ');
+    };
+    $('#uswap',root).onclick=()=>{ const f=$('#uf',root),t=$('#ut',root); [f.value,t.value]=[t.value,f.value]; calc(); };
+    root.addEventListener('input',calc); calc();
+  };
+}
+const lin=(f,sym,label)=>({label,sym,to:v=>v*f,from:v=>v/f});
+
+/* ---------- TOOLS registry ---------- */
+const CATS={calc:'Calculators',convert:'Converters',time:'Time & Date',text:'Text',encode:'Encode & Cipher',dev:'Developer',gen:'Generators',file:'Files & Media'};
+const TOOLS=[];
+const T=(id,cat,name,desc,kw,mount)=>TOOLS.push({id,cat,name,desc,kw,mount});
+
+/* ===== CALCULATORS ===== */
+T('calc','calc','Basic Calculator','Arithmetic with a keypad and history','add subtract multiply divide',root=>{
+  let expr='',hist=[];
+  root.innerHTML=`<div class="calcdisp"><div class="expr" id="ce"></div><div class="res" id="cr">0</div></div>
+   <div class="calcpad" id="pad">
+    ${['C','←','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','( )','='].map(k=>{
+      const op=['÷','×','−','+'].includes(k),eq=k==='=';
+      return `<button class="${eq?'eq':op?'op':k==='C'||k==='←'?'fn':''}" data-k="${k}">${k}</button>`;}).join('')}
+   </div>
+   <div class="out mono" id="chist" style="margin-top:14px;display:none"></div>`;
+  const ce=$('#ce',root),cr=$('#cr',root),ch=$('#chist',root);
+  const show=()=>{ ce.textContent=expr||' '; try{ cr.textContent = expr?fmt(makeEval()(expr.replace(/÷/g,'/').replace(/×/g,'*').replace(/−/g,'-')),8):'0'; }catch{ cr.textContent='…'; } };
+  $('#pad',root).onclick=e=>{ const b=e.target.closest('button'); if(!b)return; const k=b.dataset.k;
+    if(k==='C'){expr='';}
+    else if(k==='←'){expr=expr.slice(0,-1);}
+    else if(k==='( )'){ const op=(expr.match(/\(/g)||[]).length,cl=(expr.match(/\)/g)||[]).length; expr+= op>cl && /[0-9)]$/.test(expr) ? ')' : '('; }
+    else if(k==='='){ try{ const r=makeEval()(expr.replace(/÷/g,'/').replace(/×/g,'*').replace(/−/g,'-')); hist.unshift(expr+' = '+fmt(r,8)); expr=String(r); ch.style.display='block'; ch.innerHTML=hist.slice(0,8).map(esc).join('\n'); }catch{ flash('Invalid expression'); } }
+    else expr+=k;
+    show();
+  };
+  show();
+});
+
+T('sci','calc','Scientific Calculator','Expression evaluator with trig, logs, constants','scientific sin cos tan log sqrt power',root=>{
+  root.innerHTML=`<div class="field"><label>Expression</label><input class="inp mono" id="se" value="sin(45)^2 + cos(45)^2"></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip on" data-a="deg">Degrees</span><span class="chip" data-a="rad">Radians</span></div>
+   <div class="out"><div class="outhead"><span class="lbl">Result</span>${copyBtn('#sr')}</div><div class="big" id="sr">1</div><div class="sub" id="serr"></div></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Functions: sin cos tan asin acos atan sinh cosh tanh sqrt cbrt ln log log2 exp abs floor ceil round sign · constants: pi e tau phi · postfix ! for factorial · ^ for power</div>`;
+  let angle='deg';
+  const run=()=>{ try{ const r=makeEval(angle)($('#se',root).value); $('#sr',root).textContent=fmt(r,10); $('#serr',root).textContent=''; }catch(e){ $('#sr',root).textContent='—'; $('#serr',root).innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
+  $$('.chip',root).forEach(c=>c.onclick=()=>{ $$('.chip',root).forEach(x=>x.classList.remove('on')); c.classList.add('on'); angle=c.dataset.a; run(); });
+  $('#se',root).addEventListener('input',run); run();
+});
+
+T('percent','calc','Percentage Calculator','What is X% of Y, and % change','percent percentage of change increase',root=>{
+  root.innerHTML=`
+   <div class="field"><label>What is <b>X%</b> of <b>Y</b>?</label><div class="row row3"><input class="inp" id="p1x" type="number" value="15" placeholder="X"><input class="inp" id="p1y" type="number" value="200" placeholder="Y"></div><div class="out mono" id="p1o" style="margin-top:8px"></div></div>
+   <div class="field"><label><b>A</b> is what % of <b>B</b>?</label><div class="row row3"><input class="inp" id="p2a" type="number" value="30" placeholder="A"><input class="inp" id="p2b" type="number" value="200" placeholder="B"></div><div class="out mono" id="p2o" style="margin-top:8px"></div></div>
+   <div class="field"><label>% change from <b>Old</b> to <b>New</b></label><div class="row row3"><input class="inp" id="p3o" type="number" value="200" placeholder="Old"><input class="inp" id="p3n" type="number" value="260" placeholder="New"></div><div class="out mono" id="p3r" style="margin-top:8px"></div></div>`;
+  const calc=()=>{
+    const g=id=>parseFloat($('#'+id,root).value);
+    $('#p1o',root).textContent = `${fmt(g('p1x'))}% of ${fmt(g('p1y'))} = ${fmt(g('p1x')*g('p1y')/100,6)}`;
+    $('#p2o',root).textContent = `${fmt(g('p2a'))} is ${fmt(g('p2a')/g('p2b')*100,4)}% of ${fmt(g('p2b'))}`;
+    const d=(g('p3n')-g('p3o'))/Math.abs(g('p3o'))*100;
+    $('#p3r',root).innerHTML = `Change: <span class="${d>=0?'ok':'err'}">${d>=0?'+':''}${fmt(d,4)}%</span> (${fmt(g('p3n')-g('p3o'))})`;
+  };
+  root.addEventListener('input',calc); calc();
+});
+
+T('tip','calc','Tip Calculator','Split a bill with tip across people','tip gratuity bill split restaurant',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Bill amount</label><input class="inp" id="tb" type="number" value="84.50"></div><div class="field"><label>Tip %</label><input class="inp" id="tp" type="number" value="15"></div><div class="field"><label>People</label><input class="inp" id="tpl" type="number" value="2" min="1"></div></div>
+   <div class="out"><div class="kv">
+     <div class="k">Tip amount</div><div class="v" id="t_tip"></div>
+     <div class="k">Total</div><div class="v" id="t_total"></div>
+     <div class="k">Per person</div><div class="v" id="t_pp"></div>
+   </div></div>`;
+  const c=()=>{ const b=+$('#tb',root).value,p=+$('#tp',root).value,n=Math.max(1,+$('#tpl',root).value); const tip=b*p/100,tot=b+tip; $('#t_tip',root).textContent=fmt2(tip); $('#t_total',root).textContent=fmt2(tot); $('#t_pp',root).textContent=fmt2(tot/n); };
+  root.addEventListener('input',c); c();
+});
+
+T('loan','calc','Loan / EMI Calculator','Monthly repayment, total interest, schedule','loan emi mortgage repayment amortization',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Principal</label><input class="inp" id="lp" type="number" value="300000"></div><div class="field"><label>Annual rate %</label><input class="inp" id="lr" type="number" value="5.5" step="0.1"></div><div class="field"><label>Years</label><input class="inp" id="ly" type="number" value="25"></div></div>
+   <div class="out"><div class="kv"><div class="k">Monthly payment</div><div class="v" id="l_m"></div><div class="k">Total paid</div><div class="v" id="l_t"></div><div class="k">Total interest</div><div class="v" id="l_i"></div></div></div>
+   <div class="scrollx" style="margin-top:14px"><table class="tbl"><thead><tr><th>Year</th><th>Interest paid</th><th>Principal paid</th><th>Balance</th></tr></thead><tbody id="l_sched"></tbody></table></div>`;
+  const c=()=>{ const P=+$('#lp',root).value,r=(+$('#lr',root).value)/100/12,n=(+$('#ly',root).value)*12;
+    const m = r===0 ? P/n : P*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1);
+    $('#l_m',root).textContent=fmt2(m); $('#l_t',root).textContent=fmt2(m*n); $('#l_i',root).textContent=fmt2(m*n-P);
+    let bal=P,rows='';
+    for(let y=1;y<=+$('#ly',root).value;y++){ let ip=0,pp=0; for(let k=0;k<12;k++){ const i=bal*r; ip+=i; pp+=m-i; bal-=m-i; } rows+=`<tr><td>${y}</td><td class="num">${fmt2(ip)}</td><td class="num">${fmt2(pp)}</td><td class="num">${fmt2(Math.max(0,bal))}</td></tr>`; }
+    $('#l_sched',root).innerHTML=rows;
+  };
+  root.addEventListener('input',c); c();
+});
+
+T('compound','calc','Compound Interest','Growth with regular contributions','compound interest investment savings growth',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Initial amount</label><input class="inp" id="ci" type="number" value="10000"></div><div class="field"><label>Monthly add</label><input class="inp" id="cm" type="number" value="500"></div></div>
+   <div class="row"><div class="field"><label>Annual rate %</label><input class="inp" id="cr" type="number" value="7" step="0.1"></div><div class="field"><label>Years</label><input class="inp" id="cy" type="number" value="20"></div><div class="field"><label>Compounds/yr</label><input class="inp" id="cn" type="number" value="12"></div></div>
+   <div class="out"><div class="kv"><div class="k">Final balance</div><div class="v" id="co_f"></div><div class="k">You contributed</div><div class="v" id="co_c"></div><div class="k">Interest earned</div><div class="v" id="co_i"></div></div></div>`;
+  const c=()=>{ const P=+$('#ci',root).value,PMT=+$('#cm',root).value,r=(+$('#cr',root).value)/100,t=+$('#cy',root).value,n=+$('#cn',root).value;
+    const months=t*12; let bal=P; const mr=r/12;
+    for(let i=0;i<months;i++){ bal=bal*(1+mr)+PMT; }
+    const contrib=P+PMT*months;
+    $('#co_f',root).textContent=fmt2(bal); $('#co_c',root).textContent=fmt2(contrib); $('#co_i',root).textContent=fmt2(bal-contrib);
+  };
+  root.addEventListener('input',c); c();
+});
+
+T('savings','calc','Savings Goal','Monthly amount needed to hit a target','savings goal target save monthly',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Goal</label><input class="inp" id="sg" type="number" value="50000"></div><div class="field"><label>Have now</label><input class="inp" id="sh" type="number" value="8000"></div></div>
+   <div class="row"><div class="field"><label>Months</label><input class="inp" id="sm" type="number" value="36"></div><div class="field"><label>Annual rate %</label><input class="inp" id="sr" type="number" value="4" step="0.1"></div></div>
+   <div class="out"><div class="outhead"><span class="lbl">Save each month</span></div><div class="big" id="so">—</div><div class="sub" id="so2"></div></div>`;
+  const c=()=>{ const G=+$('#sg',root).value,H=+$('#sh',root).value,m=+$('#sm',root).value,r=(+$('#sr',root).value)/100/12;
+    const fvH=H*Math.pow(1+r,m); const need=G-fvH;
+    const pmt = r===0 ? need/m : need*r/(Math.pow(1+r,m)-1);
+    $('#so',root).textContent = need<=0 ? 'Already there' : fmt2(pmt); $('#so2',root).textContent = need>0?`Current balance grows to ${fmt2(fvH)} on its own`:''; };
+  root.addEventListener('input',c); c();
+});
+
+T('inflation','calc','Inflation Calculator','Future value of money at a given rate','inflation purchasing power future value',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Amount today</label><input class="inp" id="ia" type="number" value="1000"></div><div class="field"><label>Inflation %/yr</label><input class="inp" id="ir" type="number" value="3" step="0.1"></div><div class="field"><label>Years</label><input class="inp" id="iy" type="number" value="20"></div></div>
+   <div class="out"><div class="kv"><div class="k">Future cost of same goods</div><div class="v" id="if"></div><div class="k">Today's money worth then</div><div class="v" id="ib"></div></div></div>`;
+  const c=()=>{ const a=+$('#ia',root).value,r=(+$('#ir',root).value)/100,y=+$('#iy',root).value; $('#if',root).textContent=fmt2(a*Math.pow(1+r,y)); $('#ib',root).textContent=fmt2(a/Math.pow(1+r,y)); };
+  root.addEventListener('input',c); c();
+});
+
+T('discount','calc','Discount Calculator','Sale price and amount saved','discount sale price off savings',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Original price</label><input class="inp" id="do" type="number" value="129.99"></div><div class="field"><label>Discount %</label><input class="inp" id="dd" type="number" value="25"></div></div>
+   <div class="out"><div class="kv"><div class="k">You pay</div><div class="v" id="dp"></div><div class="k">You save</div><div class="v" id="ds"></div></div></div>`;
+  const c=()=>{ const o=+$('#do',root).value,d=+$('#dd',root).value; $('#dp',root).textContent=fmt2(o*(1-d/100)); $('#ds',root).textContent=fmt2(o*d/100); };
+  root.addEventListener('input',c); c();
+});
+
+T('tax','calc','Sales Tax / GST / VAT','Add or remove tax from a price','tax gst vat sales add remove',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Amount</label><input class="inp" id="xa" type="number" value="100"></div><div class="field"><label>Tax rate %</label><input class="inp" id="xr" type="number" value="9" step="0.1"></div></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip on" data-m="add">Add tax</span><span class="chip" data-m="rem">Amount includes tax</span></div>
+   <div class="out"><div class="kv"><div class="k">Net</div><div class="v" id="xn"></div><div class="k">Tax</div><div class="v" id="xt"></div><div class="k">Gross</div><div class="v" id="xg"></div></div></div>`;
+  let mode='add';
+  const c=()=>{ const a=+$('#xa',root).value,r=(+$('#xr',root).value)/100; let net,tax,gross; if(mode==='add'){net=a;tax=a*r;gross=a+tax;}else{gross=a;net=a/(1+r);tax=gross-net;} $('#xn',root).textContent=fmt2(net);$('#xt',root).textContent=fmt2(tax);$('#xg',root).textContent=fmt2(gross); };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{$$('.chip',root).forEach(x=>x.classList.remove('on'));ch.classList.add('on');mode=ch.dataset.m;c();});
+  root.addEventListener('input',c); c();
+});
+
+T('fuel','calc','Fuel Cost Calculator','Trip fuel cost from distance & economy','fuel cost trip petrol gas mileage',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Distance (km)</label><input class="inp" id="fd" type="number" value="450"></div><div class="field"><label>Economy (L/100km)</label><input class="inp" id="fe" type="number" value="7.2" step="0.1"></div><div class="field"><label>Fuel price /L</label><input class="inp" id="fp" type="number" value="2.1" step="0.01"></div></div>
+   <div class="out"><div class="kv"><div class="k">Fuel needed</div><div class="v" id="fl"></div><div class="k">Total cost</div><div class="v" id="fc"></div><div class="k">Cost per km</div><div class="v" id="fk"></div></div></div>`;
+  const c=()=>{ const d=+$('#fd',root).value,e=+$('#fe',root).value,p=+$('#fp',root).value; const L=d*e/100; $('#fl',root).textContent=fmt(L,2)+' L'; $('#fc',root).textContent=fmt2(L*p); $('#fk',root).textContent=fmt2(L*p/d); };
+  root.addEventListener('input',c); c();
+});
+
+T('bmi','calc','BMI Calculator','Body mass index with category','bmi body mass index weight height health',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Weight (kg)</label><input class="inp" id="bw" type="number" value="72"></div><div class="field"><label>Height (cm)</label><input class="inp" id="bh" type="number" value="175"></div></div>
+   <div class="out"><div class="outhead"><span class="lbl">BMI</span></div><div class="big" id="bo">—</div><div class="sub" id="bc"></div></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}A general fitness indicator, not a diagnosis. It doesn't account for muscle mass, age, or body composition.</div>`;
+  const c=()=>{ const w=+$('#bw',root).value,h=(+$('#bh',root).value)/100; const b=w/(h*h); $('#bo',root).textContent=isFinite(b)?fmt(b,1):'—';
+    const cat=b<18.5?['Underweight','wn']:b<25?['Healthy range','ok']:b<30?['Overweight','wn']:['Obese','err']; $('#bc',root).innerHTML=isFinite(b)?`<span class="${cat[1]}">${cat[0]}</span>`:''; };
+  root.addEventListener('input',c); c();
+});
+
+T('bmr','calc','Calorie / BMR Calculator','Daily energy needs (Mifflin-St Jeor)','bmr calorie tdee metabolic diet',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Weight (kg)</label><input class="inp" id="mw" type="number" value="72"></div><div class="field"><label>Height (cm)</label><input class="inp" id="mh" type="number" value="175"></div><div class="field"><label>Age</label><input class="inp" id="ma" type="number" value="35"></div></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip on" data-s="m">Male</span><span class="chip" data-s="f">Female</span></div>
+   <div class="field"><label>Activity level</label><select class="inp" id="mact"><option value="1.2">Sedentary</option><option value="1.375" selected>Light (1-3 days)</option><option value="1.55">Moderate (3-5 days)</option><option value="1.725">Active (6-7 days)</option><option value="1.9">Very active</option></select></div>
+   <div class="out"><div class="kv"><div class="k">BMR (at rest)</div><div class="v" id="mbmr"></div><div class="k">Maintenance (TDEE)</div><div class="v" id="mtdee"></div></div></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Estimates only. For a personalised plan consult a professional.</div>`;
+  let sex='m';
+  const c=()=>{ const w=+$('#mw',root).value,h=+$('#mh',root).value,a=+$('#ma',root).value,act=+$('#mact',root).value; const bmr=10*w+6.25*h-5*a+(sex==='m'?5:-161); $('#mbmr',root).textContent=fmt(bmr,0)+' kcal'; $('#mtdee',root).textContent=fmt(bmr*act,0)+' kcal'; };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{$$('.chip',root).forEach(x=>x.classList.remove('on'));ch.classList.add('on');sex=ch.dataset.s;c();});
+  root.addEventListener('input',c); c();
+});
+
+T('aspect','calc','Aspect Ratio Calculator','Scale dimensions keeping ratio','aspect ratio resize dimensions image video',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Original W</label><input class="inp" id="aw" type="number" value="1920"></div><div class="field"><label>Original H</label><input class="inp" id="ah" type="number" value="1080"></div></div>
+   <div class="row"><div class="field"><label>New W (blank = auto)</label><input class="inp" id="anw" type="number" value="1280"></div><div class="field"><label>New H (blank = auto)</label><input class="inp" id="anh" type="number" placeholder="auto"></div></div>
+   <div class="out"><div class="kv"><div class="k">Ratio</div><div class="v" id="ar"></div><div class="k">Scaled size</div><div class="v" id="as"></div></div></div>`;
+  const gcd=(a,b)=>b?gcd(b,a%b):a;
+  let last='w';
+  $('#anw',root).addEventListener('input',()=>last='w'); $('#anh',root).addEventListener('input',()=>last='h');
+  const c=()=>{ const w=+$('#aw',root).value,h=+$('#ah',root).value; const g=gcd(w,h)||1; $('#ar',root).textContent=`${w/g}:${h/g} (${fmt(w/h,4)})`;
+    let nw=parseFloat($('#anw',root).value),nh=parseFloat($('#anh',root).value);
+    if(last==='w'&&isFinite(nw)){ nh=nw*h/w; $('#anh',root).value=''; $('#anh',root).placeholder=fmt(nh,2); }
+    else if(last==='h'&&isFinite(nh)){ nw=nh*w/h; $('#anw',root).placeholder=fmt(nw,2); }
+    $('#as',root).textContent=`${fmt(nw,1)} × ${fmt(nh,1)}`; };
+  root.addEventListener('input',c); c();
+});
+
+T('quadratic','calc','Quadratic Solver','Roots of ax² + bx + c = 0','quadratic equation roots solve algebra',root=>{
+  root.innerHTML=`<div class="row row3"><div class="field"><label>a</label><input class="inp" id="qa" type="number" value="1"></div><div class="field"><label>b</label><input class="inp" id="qb" type="number" value="-5"></div><div class="field"><label>c</label><input class="inp" id="qc" type="number" value="6"></div></div>
+   <div class="out mono" id="qo"></div>`;
+  const c=()=>{ const a=+$('#qa',root).value,b=+$('#qb',root).value,cc=+$('#qc',root).value; const o=$('#qo',root);
+    if(a===0){ o.innerHTML = b===0?'Not an equation':'Linear: x = '+fmt(-cc/b,6); return; }
+    const d=b*b-4*a*cc; let s;
+    if(d>0){ const r1=(-b+Math.sqrt(d))/(2*a),r2=(-b-Math.sqrt(d))/(2*a); s=`Two real roots\nx₁ = ${fmt(r1,6)}\nx₂ = ${fmt(r2,6)}`; }
+    else if(d===0){ s=`One real root\nx = ${fmt(-b/(2*a),6)}`; }
+    else{ const re=fmt(-b/(2*a),4),im=fmt(Math.sqrt(-d)/(2*a),4); s=`Two complex roots\nx = ${re} ± ${im}i`; }
+    o.textContent=`Discriminant = ${fmt(d,4)}\n${s}`; };
+  root.addEventListener('input',c); c();
+});
+
+T('stats','calc','Statistics','Mean, median, mode, std dev of a list','statistics mean median mode standard deviation average',root=>{
+  root.innerHTML=`<div class="field"><label>Numbers (comma, space or newline separated)</label><textarea class="inp" id="sd">12, 15, 15, 18, 22, 27, 31, 15, 40</textarea></div>
+   <div class="out"><div class="kv" id="so"></div></div>`;
+  const c=()=>{ const nums=$('#sd',root).value.split(/[\s,]+/).map(Number).filter(x=>!isNaN(x)); const o=$('#so',root);
+    if(!nums.length){ o.innerHTML='<div class="k">No numbers</div><div class="v">—</div>'; return; }
+    const n=nums.length,sum=nums.reduce((a,b)=>a+b,0),mean=sum/n; const sorted=[...nums].sort((a,b)=>a-b);
+    const med=n%2?sorted[(n-1)/2]:(sorted[n/2-1]+sorted[n/2])/2;
+    const freq={}; nums.forEach(x=>freq[x]=(freq[x]||0)+1); const mx=Math.max(...Object.values(freq)); const mode=mx>1?Object.keys(freq).filter(k=>freq[k]===mx).join(', '):'none';
+    const variance=nums.reduce((a,b)=>a+(b-mean)**2,0)/n; const sd=Math.sqrt(variance);
+    o.innerHTML=[['Count',n],['Sum',fmt(sum,4)],['Mean',fmt(mean,4)],['Median',fmt(med,4)],['Mode',mode],['Min',fmt(sorted[0],4)],['Max',fmt(sorted[n-1],4)],['Range',fmt(sorted[n-1]-sorted[0],4)],['Std dev (σ)',fmt(sd,4)],['Variance',fmt(variance,4)]].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+
+T('gcdlcm','calc','GCD & LCM','Greatest common divisor, lowest multiple','gcd lcm factor multiple divisor',root=>{
+  root.innerHTML=`<div class="field"><label>Numbers (comma separated)</label><input class="inp" id="gl" value="24, 36, 60"></div><div class="out"><div class="kv"><div class="k">GCD</div><div class="v" id="gg"></div><div class="k">LCM</div><div class="v" id="gll"></div></div></div>`;
+  const gcd=(a,b)=>b?gcd(b,a%b):a; const lcm=(a,b)=>a/gcd(a,b)*b;
+  const c=()=>{ const ns=$('#gl',root).value.split(/[\s,]+/).map(Number).filter(x=>Number.isInteger(x)&&x>0); if(!ns.length){$('#gg',root).textContent='—';$('#gll',root).textContent='—';return;} $('#gg',root).textContent=ns.reduce(gcd); $('#gll',root).textContent=ns.reduce(lcm); };
+  root.addEventListener('input',c); c();
+});
+
+T('prime','calc','Prime Checker & Factorizer','Test primality and show prime factors','prime factor factorize number',root=>{
+  root.innerHTML=`<div class="field"><label>Number</label><input class="inp" id="pn" type="number" value="360"></div><div class="out mono" id="po"></div>`;
+  const c=()=>{ let n=Math.floor(Math.abs(+$('#pn',root).value)); const o=$('#po',root); if(n<2){o.textContent=n+' is neither prime nor composite';return;}
+    let x=n,factors=[]; for(let d=2;d*d<=x;d++){ while(x%d===0){factors.push(d);x/=d;} } if(x>1)factors.push(x);
+    const prime=factors.length===1;
+    const grouped={}; factors.forEach(f=>grouped[f]=(grouped[f]||0)+1);
+    const fstr=Object.entries(grouped).map(([b,e])=>e>1?`${b}^${e}`:b).join(' × ');
+    o.innerHTML=`${n} is <b class="${prime?'ok':'wn'}">${prime?'PRIME':'composite'}</b>\nPrime factorisation: ${fstr}\nDivisors: ${countDiv(grouped)}`; };
+  function countDiv(g){ return Object.values(g).reduce((a,e)=>a*(e+1),1); }
+  root.addEventListener('input',c); c();
+});
+
+T('factorial','calc','Factorial / Combinations','n!, permutations nPr, combinations nCr','factorial permutation combination ncr npr',root=>{
+  root.innerHTML=`<div class="field"><label>n! — enter n</label><input class="inp" id="fn" type="number" value="10"></div><div class="out mono" id="ffo" style="margin-bottom:14px"></div>
+   <div class="row"><div class="field"><label>n</label><input class="inp" id="cn" type="number" value="52"></div><div class="field"><label>r</label><input class="inp" id="cr" type="number" value="5"></div></div>
+   <div class="out"><div class="kv"><div class="k">Permutations nPr</div><div class="v" id="cnpr"></div><div class="k">Combinations nCr</div><div class="v" id="cncr"></div></div></div>`;
+  const fact=n=>{ if(n<0||n>170)return NaN; let r=1; for(let i=2;i<=n;i++)r*=i; return r; };
+  const c=()=>{ const n=+$('#fn',root).value; $('#ffo',root).textContent = n>170?'Too large (>170)':`${n}! = ${fact(n).toExponential(6)} = ${fact(n).toLocaleString()}`;
+    const N=+$('#cn',root).value,r=+$('#cr',root).value; const npr=fact(N)/fact(N-r),ncr=npr/fact(r); $('#cnpr',root).textContent=isFinite(npr)?npr.toLocaleString():'—'; $('#cncr',root).textContent=isFinite(ncr)?ncr.toLocaleString():'—'; };
+  root.addEventListener('input',c); c();
+});
+
+T('triangle','calc','Right Triangle','Pythagoras: sides, hypotenuse, angles','triangle pythagoras hypotenuse right angle trigonometry',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Side a</label><input class="inp" id="ta" type="number" value="3"></div><div class="field"><label>Side b</label><input class="inp" id="tb" type="number" value="4"></div></div>
+   <div class="out"><div class="kv"><div class="k">Hypotenuse c</div><div class="v" id="tc"></div><div class="k">Area</div><div class="v" id="tar"></div><div class="k">Perimeter</div><div class="v" id="tp"></div><div class="k">Angle A (opp a)</div><div class="v" id="taa"></div><div class="k">Angle B (opp b)</div><div class="v" id="tbb"></div></div></div>`;
+  const c=()=>{ const a=+$('#ta',root).value,b=+$('#tb',root).value,h=Math.hypot(a,b); $('#tc',root).textContent=fmt(h,4); $('#tar',root).textContent=fmt(a*b/2,4); $('#tp',root).textContent=fmt(a+b+h,4); $('#taa',root).textContent=fmt(Math.atan2(a,b)*180/Math.PI,2)+'°'; $('#tbb',root).textContent=fmt(Math.atan2(b,a)*180/Math.PI,2)+'°'; };
+  root.addEventListener('input',c); c();
+});
+
+/* ===== CONVERTERS ===== */
+T('length','convert','Length','Metres, feet, miles, inches and more','length distance metre feet mile inch km',unitTool({
+  mm:lin(0.001,'mm','Millimetre'),cm:lin(0.01,'cm','Centimetre'),m:lin(1,'m','Metre'),km:lin(1000,'km','Kilometre'),
+  in:lin(0.0254,'in','Inch'),ft:lin(0.3048,'ft','Foot'),yd:lin(0.9144,'yd','Yard'),mi:lin(1609.344,'mi','Mile'),nmi:lin(1852,'nmi','Nautical mile')
+},'km','mi',10));
+T('weight','convert','Weight / Mass','Grams, kilograms, pounds, ounces','weight mass kg pound ounce gram stone',unitTool({
+  mg:lin(1e-6,'mg','Milligram'),g:lin(0.001,'g','Gram'),kg:lin(1,'kg','Kilogram'),t:lin(1000,'t','Tonne'),
+  oz:lin(0.0283495,'oz','Ounce'),lb:lin(0.453592,'lb','Pound'),st:lin(6.35029,'st','Stone')
+},'kg','lb',75));
+T('temperature','convert','Temperature','Celsius, Fahrenheit, Kelvin','temperature celsius fahrenheit kelvin',root=>{
+  const U={C:{label:'Celsius',sym:'°C',to:v=>v,from:v=>v},F:{label:'Fahrenheit',sym:'°F',to:v=>(v-32)*5/9,from:v=>v*9/5+32},K:{label:'Kelvin',sym:'K',to:v=>v-273.15,from:v=>v+273.15}};
+  unitTool(U,'C','F',25)(root);
+});
+T('volume','convert','Volume','Litres, gallons, cups, millilitres','volume litre gallon cup ml fluid',unitTool({
+  ml:lin(0.001,'mL','Millilitre'),l:lin(1,'L','Litre'),tsp:lin(0.00492892,'tsp','Teaspoon'),tbsp:lin(0.0147868,'tbsp','Tablespoon'),
+  cup:lin(0.236588,'cup','Cup (US)'),pt:lin(0.473176,'pt','Pint (US)'),qt:lin(0.946353,'qt','Quart (US)'),gal:lin(3.78541,'gal','Gallon (US)'),galuk:lin(4.54609,'gal UK','Gallon (UK)')
+},'l','cup',2));
+T('area','convert','Area','Square metres, acres, hectares','area square metre acre hectare',unitTool({
+  cm2:lin(0.0001,'cm²','Sq centimetre'),m2:lin(1,'m²','Sq metre'),km2:lin(1e6,'km²','Sq kilometre'),
+  ft2:lin(0.092903,'ft²','Sq foot'),yd2:lin(0.836127,'yd²','Sq yard'),ac:lin(4046.86,'ac','Acre'),ha:lin(10000,'ha','Hectare'),mi2:lin(2.59e6,'mi²','Sq mile')
+},'m2','ft2',100));
+T('speed','convert','Speed','km/h, mph, m/s, knots','speed velocity kmh mph knot ms',unitTool({
+  ms:lin(1,'m/s','Metre/sec'),kmh:lin(0.277778,'km/h','km per hour'),mph:lin(0.44704,'mph','Miles per hour'),fts:lin(0.3048,'ft/s','Feet/sec'),kn:lin(0.514444,'kn','Knot')
+},'kmh','mph',100));
+T('data','convert','Data Storage','Bytes to petabytes (binary)','data storage byte kb mb gb tb',unitTool({
+  b:lin(1,'B','Byte'),kb:lin(1024,'KB','Kilobyte'),mb:lin(1048576,'MB','Megabyte'),gb:lin(1073741824,'GB','Gigabyte'),tb:lin(1099511627776,'TB','Terabyte'),pb:lin(1125899906842624,'PB','Petabyte')
+},'mb','gb',1500));
+T('pressure','convert','Pressure','Pascals, bar, psi, atm','pressure pascal bar psi atm',unitTool({
+  pa:lin(1,'Pa','Pascal'),kpa:lin(1000,'kPa','Kilopascal'),bar:lin(100000,'bar','Bar'),psi:lin(6894.76,'psi','PSI'),atm:lin(101325,'atm','Atmosphere'),mmhg:lin(133.322,'mmHg','mmHg')
+},'bar','psi',1));
+T('energy','convert','Energy','Joules, calories, kWh','energy joule calorie kwh watt',unitTool({
+  j:lin(1,'J','Joule'),kj:lin(1000,'kJ','Kilojoule'),cal:lin(4.184,'cal','Calorie'),kcal:lin(4184,'kcal','Kilocalorie'),wh:lin(3600,'Wh','Watt-hour'),kwh:lin(3.6e6,'kWh','Kilowatt-hour')
+},'kcal','kj',100));
+T('angle','convert','Angle','Degrees, radians, gradians','angle degree radian gradian',unitTool({
+  deg:lin(1,'°','Degree'),rad:lin(57.29578,'rad','Radian'),grad:lin(0.9,'grad','Gradian'),turn:lin(360,'turn','Turn')
+},'deg','rad',90));
+T('time','convert','Time Duration','Seconds, minutes, hours, days','time duration seconds minutes hours days weeks',unitTool({
+  ms:lin(0.001,'ms','Millisecond'),s:lin(1,'s','Second'),min:lin(60,'min','Minute'),h:lin(3600,'h','Hour'),d:lin(86400,'d','Day'),wk:lin(604800,'wk','Week'),yr:lin(31557600,'yr','Year')
+},'h','min',2.5));
+T('power','convert','Power','Watts, horsepower, kW','power watt horsepower kilowatt',unitTool({
+  w:lin(1,'W','Watt'),kw:lin(1000,'kW','Kilowatt'),hp:lin(745.7,'hp','Horsepower'),mw:lin(1e6,'MW','Megawatt')
+},'kw','hp',100));
+T('cooking','convert','Cooking Measures','Cups, tbsp, grams (water-equiv)','cooking recipe cup tablespoon gram ml',unitTool({
+  tsp:lin(4.92892,'tsp','Teaspoon'),tbsp:lin(14.7868,'tbsp','Tablespoon'),cup:lin(236.588,'cup','Cup'),ml:lin(1,'mL','Millilitre'),floz:lin(29.5735,'fl oz','Fluid ounce')
+},'cup','ml',1));
+T('numbase','convert','Number Base','Binary, octal, decimal, hex','base binary octal decimal hexadecimal radix',root=>{
+  root.innerHTML=`<div class="field"><label>Value</label><input class="inp mono" id="nbv" value="255"></div>
+   <div class="field"><label>Input base</label><select class="inp" id="nbb"><option value="2">Binary (2)</option><option value="8">Octal (8)</option><option value="10" selected>Decimal (10)</option><option value="16">Hex (16)</option></select></div>
+   <div class="out"><div class="kv"><div class="k">Binary</div><div class="v" id="nb2"></div><div class="k">Octal</div><div class="v" id="nb8"></div><div class="k">Decimal</div><div class="v" id="nb10"></div><div class="k">Hex</div><div class="v" id="nb16"></div></div></div>`;
+  const c=()=>{ const v=$('#nbv',root).value.trim(),b=+$('#nbb',root).value; const n=parseInt(v,b);
+    const set=(id,val)=>$('#'+id,root).innerHTML=val; if(isNaN(n)){['nb2','nb8','nb10','nb16'].forEach(i=>set(i,'<span class="err">invalid</span>'));return;}
+    set('nb2',n.toString(2)); set('nb8',n.toString(8)); set('nb10',n.toString(10)); set('nb16',n.toString(16).toUpperCase()); };
+  root.addEventListener('input',c); c();
+});
+T('roman','convert','Roman Numerals','Convert between numbers and Roman','roman numeral number convert',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Number (1–3999)</label><input class="inp" id="rn" type="number" value="2026"></div><div class="field"><label>Roman</label><input class="inp mono" id="rr" value="MMXXVI"></div></div><div class="out mono" id="ro"></div>`;
+  const map=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  const toR=n=>{ if(n<1||n>3999)return'—'; let s=''; for(const[v,sym]of map){while(n>=v){s+=sym;n-=v;}} return s; };
+  const fromR=s=>{ s=s.toUpperCase(); let i=0,n=0; for(const[v,sym]of map){ while(s.startsWith(sym,i)){n+=v;i+=sym.length;} } return i===s.length&&toR(n)===s?n:null; };
+  $('#rn',root).addEventListener('input',()=>{ const n=+$('#rn',root).value; $('#rr',root).value=toR(n); $('#ro',root).textContent=`${n} = ${toR(n)}`; });
+  $('#rr',root).addEventListener('input',()=>{ const n=fromR($('#rr',root).value); $('#ro',root).innerHTML = n?`${$('#rr',root).value.toUpperCase()} = ${n}`:'<span class="err">invalid Roman numeral</span>'; if(n)$('#rn',root).value=n; });
+  $('#ro',root).textContent='2026 = MMXXVI';
+});
+T('currency','convert','Currency Converter','Offline conversion with editable rates','currency money exchange rate usd eur forex',root=>{
+  const rates={USD:1,EUR:0.92,GBP:0.79,JPY:149.5,SGD:1.35,AUD:1.52,CNY:7.24,INR:83.3,CAD:1.37,CHF:0.88,HKD:7.81,MYR:4.68,THB:35.8,KRW:1340,AED:3.67};
+  const keys=Object.keys(rates);
+  const opts=k=>keys.map(c=>`<option value="${c}"${c===k?' selected':''}>${c}</option>`).join('');
+  root.innerHTML=`<div class="field"><label>Amount</label><input class="inp" id="cya" type="number" value="1000"></div>
+   <div class="row"><div class="field"><label>From</label><select class="inp" id="cyf">${opts('USD')}</select></div><div class="field"><label>To</label><select class="inp" id="cyt">${opts('SGD')}</select></div></div>
+   <div class="out"><div class="outhead"><span class="lbl">Result</span>${copyBtn('#cyr')}</div><div class="big sm" id="cyr">—</div><div class="sub" id="cyrate"></div></div>
+   <div class="field" style="margin-top:14px"><label>Edit rates (per 1 USD)</label><textarea class="inp" id="cyrates">${keys.map(k=>k+'='+rates[k]).join('\n')}</textarea></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Rates are stored in the page and editable above — not live. Update them from your source when hosting.</div>`;
+  const c=()=>{ const txt=$('#cyrates',root).value; const r={}; txt.split(/\n+/).forEach(l=>{const[k,v]=l.split('=');if(k&&v&&isFinite(+v))r[k.trim()]=+v;});
+    const a=+$('#cya',root).value,f=$('#cyf',root).value,t=$('#cyt',root).value; if(!r[f]||!r[t]){$('#cyr',root).textContent='—';return;}
+    const res=a/r[f]*r[t]; $('#cyr',root).textContent=fmt2(res)+' '+t; $('#cyrate',root).textContent=`1 ${f} = ${fmt(r[t]/r[f],4)} ${t}`; };
+  root.addEventListener('input',c); c();
+});
+
+/* ===== TIME & DATE ===== */
+const intervals=[];
+function clearIntervals(){ while(intervals.length) clearInterval(intervals.pop()); }
+function iv(fn,ms){ const id=setInterval(fn,ms); intervals.push(id); return id; }
+
+T('clock','time','Live Clock','Current local time and date','clock time now date live',root=>{
+  root.innerHTML=`<div class="out" style="text-align:center;padding:32px"><div class="big" id="clk" style="font-size:44px"></div><div class="sub" id="clkd" style="font-size:15px;margin-top:8px"></div></div>`;
+  const u=()=>{ const d=new Date(); $('#clk',root).textContent=d.toLocaleTimeString(); $('#clkd',root).textContent=d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'}); };
+  u(); iv(u,1000);
+});
+T('worldclock','time','World Clock','Time across major cities','world clock timezone city utc',root=>{
+  const zones=[['Singapore','Asia/Singapore'],['London','Europe/London'],['New York','America/New_York'],['Los Angeles','America/Los_Angeles'],['Tokyo','Asia/Tokyo'],['Sydney','Australia/Sydney'],['Dubai','Asia/Dubai'],['Mumbai','Asia/Kolkata'],['Paris','Europe/Paris'],['UTC','UTC']];
+  root.innerHTML=`<div class="scrollx"><table class="tbl"><thead><tr><th>City</th><th>Time</th><th>Date</th></tr></thead><tbody id="wc"></tbody></table></div>`;
+  const u=()=>{ const now=new Date(); $('#wc',root).innerHTML=zones.map(([c,z])=>{ const t=now.toLocaleTimeString('en-GB',{timeZone:z}); const d=now.toLocaleDateString(undefined,{timeZone:z,month:'short',day:'numeric'}); return `<tr><td>${c}</td><td class="num">${t}</td><td>${d}</td></tr>`; }).join(''); };
+  u(); iv(u,1000);
+});
+T('stopwatch','time','Stopwatch','Start, stop, lap timer','stopwatch timer lap elapsed',root=>{
+  root.innerHTML=`<div class="out" style="text-align:center;padding:26px"><div class="big" id="sw" style="font-size:40px">00:00.00</div></div>
+   <div class="btns" style="justify-content:center"><button class="btn" id="swStart">Start</button><button class="btn ghost" id="swLap">Lap</button><button class="btn ghost" id="swReset">Reset</button></div>
+   <div class="out mono" id="swLaps" style="display:none"></div>`;
+  let start=0,elapsed=0,running=false,laps=[],raf;
+  const render=t=>{ const m=Math.floor(t/60000),s=Math.floor(t%60000/1000),cs=Math.floor(t%1000/10); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`; };
+  const tick=()=>{ $('#sw',root).textContent=render(elapsed+(running?Date.now()-start:0)); raf=requestAnimationFrame(tick); };
+  $('#swStart',root).onclick=e=>{ if(running){ elapsed+=Date.now()-start; running=false; e.target.textContent='Start'; } else { start=Date.now(); running=true; e.target.textContent='Stop'; } };
+  $('#swLap',root).onclick=()=>{ const t=elapsed+(running?Date.now()-start:0); laps.unshift(render(t)); $('#swLaps',root).style.display='block'; $('#swLaps',root).innerHTML=laps.map((l,i)=>`Lap ${laps.length-i}: ${l}`).join('\n'); };
+  $('#swReset',root).onclick=()=>{ elapsed=0;running=false;laps=[];start=0; $('#swStart',root).textContent='Start'; $('#swLaps',root).style.display='none'; };
+  tick(); intervals.push({__raf:raf});
+  const origClear=clearIntervals;
+});
+T('timer','time','Countdown Timer','Set a countdown with alert','timer countdown alarm minutes',root=>{
+  root.innerHTML=`<div class="row row3"><div class="field"><label>Hours</label><input class="inp" id="th" type="number" value="0" min="0"></div><div class="field"><label>Minutes</label><input class="inp" id="tm" type="number" value="5" min="0"></div><div class="field"><label>Seconds</label><input class="inp" id="ts" type="number" value="0" min="0"></div></div>
+   <div class="out" style="text-align:center;padding:24px"><div class="big" id="tdisp" style="font-size:40px">05:00</div></div>
+   <div class="btns" style="justify-content:center"><button class="btn" id="tstart">Start</button><button class="btn ghost" id="treset">Reset</button></div>`;
+  let left=300,running=false;
+  const read=()=>{ left=(+$('#th',root).value)*3600+(+$('#tm',root).value)*60+(+$('#ts',root).value); render(); };
+  const render=()=>{ const h=Math.floor(left/3600),m=Math.floor(left%3600/60),s=left%60; $('#tdisp',root).textContent=(h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); };
+  ['th','tm','ts'].forEach(id=>$('#'+id,root).addEventListener('input',()=>{ if(!running)read(); }));
+  iv(()=>{ if(running&&left>0){ left--; render(); if(left===0){ running=false; $('#tstart',root).textContent='Start'; flash('⏰ Time is up'); $('#tdisp',root).classList.add('ok'); } } },1000);
+  $('#tstart',root).onclick=e=>{ if(left<=0)read(); running=!running; e.target.textContent=running?'Pause':'Start'; $('#tdisp',root).classList.remove('ok'); };
+  $('#treset',root).onclick=()=>{ running=false; $('#tstart',root).textContent='Start'; $('#tdisp',root).classList.remove('ok'); read(); };
+  read();
+});
+T('pomodoro','time','Pomodoro Timer','25/5 focus and break cycles','pomodoro focus productivity work break',root=>{
+  root.innerHTML=`<div class="chips" style="justify-content:center;margin-bottom:14px"><span class="chip on" data-m="25">Focus 25m</span><span class="chip" data-m="5">Break 5m</span><span class="chip" data-m="15">Long 15m</span></div>
+   <div class="out" style="text-align:center;padding:30px"><div class="big" id="pd" style="font-size:48px">25:00</div><div class="sub" id="pmode">Focus session</div></div>
+   <div class="btns" style="justify-content:center"><button class="btn" id="pstart">Start</button><button class="btn ghost" id="preset">Reset</button></div>`;
+  let total=1500,left=1500,running=false;
+  const render=()=>{ const m=Math.floor(left/60),s=left%60; $('#pd',root).textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); };
+  iv(()=>{ if(running&&left>0){left--;render(); if(left===0){running=false;$('#pstart',root).textContent='Start';flash('Session complete');}} },1000);
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ $$('.chip',root).forEach(x=>x.classList.remove('on')); ch.classList.add('on'); total=left=(+ch.dataset.m)*60; running=false; $('#pstart',root).textContent='Start'; $('#pmode',root).textContent=ch.dataset.m==='25'?'Focus session':'Break'; render(); });
+  $('#pstart',root).onclick=e=>{ running=!running; e.target.textContent=running?'Pause':'Start'; };
+  $('#preset',root).onclick=()=>{ left=total;running=false;$('#pstart',root).textContent='Start';render(); };
+  render();
+});
+T('datediff','time','Date Difference','Days, weeks, months between dates','date difference days between duration',root=>{
+  const today=new Date().toISOString().slice(0,10);
+  root.innerHTML=`<div class="row"><div class="field"><label>From</label><input class="inp" id="d1" type="date" value="2026-01-01"></div><div class="field"><label>To</label><input class="inp" id="d2" type="date" value="${today}"></div></div>
+   <div class="out"><div class="kv" id="ddo"></div></div>`;
+  const c=()=>{ const a=new Date($('#d1',root).value),b=new Date($('#d2',root).value); if(isNaN(a)||isNaN(b)){$('#ddo',root).innerHTML='<div class="k">—</div><div class="v"></div>';return;}
+    const ms=Math.abs(b-a),days=Math.round(ms/86400000);
+    let y=b.getFullYear()-a.getFullYear(),m=b.getMonth()-a.getMonth(),d=b.getDate()-a.getDate(); if(d<0){m--;d+=new Date(b.getFullYear(),b.getMonth(),0).getDate();} if(m<0){y--;m+=12;}
+    $('#ddo',root).innerHTML=[['Total days',days],['Weeks',fmt(days/7,1)],['Months',fmt(days/30.44,1)],['Years',fmt(days/365.25,2)],['Breakdown',`${y}y ${m}m ${d}d`],['Hours',(days*24).toLocaleString()]].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+T('dateadd','time','Add / Subtract Days','Shift a date by a number of days','date add subtract days future past',root=>{
+  const today=new Date().toISOString().slice(0,10);
+  root.innerHTML=`<div class="row"><div class="field"><label>Start date</label><input class="inp" id="das" type="date" value="${today}"></div><div class="field"><label>Days (±)</label><input class="inp" id="dad" type="number" value="90"></div></div>
+   <div class="out"><div class="outhead"><span class="lbl">Result date</span>${copyBtn('#dar')}</div><div class="big sm" id="dar"></div><div class="sub" id="darw"></div></div>`;
+  const c=()=>{ const d=new Date($('#das',root).value); d.setDate(d.getDate()+ +$('#dad',root).value); if(isNaN(d)){$('#dar',root).textContent='—';return;} $('#dar',root).textContent=d.toISOString().slice(0,10); $('#darw',root).textContent=d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'}); };
+  root.addEventListener('input',c); c();
+});
+T('age','time','Age Calculator','Exact age from birth date','age birthday years months days',root=>{
+  root.innerHTML=`<div class="field"><label>Date of birth</label><input class="inp" id="abd" type="date" value="1990-06-15"></div><div class="out"><div class="kv" id="ao"></div></div>`;
+  const c=()=>{ const b=new Date($('#abd',root).value),n=new Date(); if(isNaN(b)){$('#ao',root).innerHTML='';return;}
+    let y=n.getFullYear()-b.getFullYear(),m=n.getMonth()-b.getMonth(),d=n.getDate()-b.getDate(); if(d<0){m--;d+=new Date(n.getFullYear(),n.getMonth(),0).getDate();} if(m<0){y--;m+=12;}
+    const days=Math.floor((n-b)/86400000); const next=new Date(n.getFullYear(),b.getMonth(),b.getDate()); if(next<n)next.setFullYear(n.getFullYear()+1); const dto=Math.ceil((next-n)/86400000);
+    $('#ao',root).innerHTML=[['Age',`${y} years, ${m} months, ${d} days`],['Total days',days.toLocaleString()],['Total weeks',Math.floor(days/7).toLocaleString()],['Total months',(y*12+m).toLocaleString()],['Next birthday',dto+' days']].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+T('unixtime','time','Unix Timestamp','Convert epoch ↔ human date','unix timestamp epoch time convert',root=>{
+  root.innerHTML=`<div class="field"><label>Unix timestamp (seconds)</label><div class="row"><input class="inp mono" id="uts" value="${Math.floor(Date.now()/1000)}"><button class="btn ghost sm" id="utnow">Now</button></div></div>
+   <div class="out mono" id="uto" style="margin-bottom:14px"></div>
+   <div class="field"><label>Human date → timestamp</label><input class="inp" id="uth" type="datetime-local"></div><div class="out mono" id="uth2"></div>`;
+  const c1=()=>{ const t=parseInt($('#uts',root).value); if(isNaN(t)){$('#uto',root).textContent='—';return;} const d=new Date(t*1000); $('#uto',root).textContent=`Local: ${d.toLocaleString()}\nUTC:   ${d.toUTCString()}\nISO:   ${d.toISOString()}`; };
+  const c2=()=>{ const v=$('#uth',root).value; if(!v){$('#uth2',root).textContent='';return;} const t=Math.floor(new Date(v).getTime()/1000); $('#uth2',root).textContent=`Timestamp: ${t} (s) · ${t*1000} (ms)`; };
+  $('#utnow',root).onclick=()=>{ $('#uts',root).value=Math.floor(Date.now()/1000); c1(); };
+  $('#uts',root).addEventListener('input',c1); $('#uth',root).addEventListener('input',c2); c1();
+});
+T('weeknum','time','Week Number','ISO week number for any date','week number iso calendar',root=>{
+  const today=new Date().toISOString().slice(0,10);
+  root.innerHTML=`<div class="field"><label>Date</label><input class="inp" id="wd" type="date" value="${today}"></div><div class="out"><div class="kv" id="wo"></div></div>`;
+  const c=()=>{ const d=new Date($('#wd',root).value); if(isNaN(d)){$('#wo',root).innerHTML='';return;}
+    const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const ys=new Date(Date.UTC(t.getUTCFullYear(),0,1)); const wk=Math.ceil(((t-ys)/86400000+1)/7);
+    const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);
+    $('#wo',root).innerHTML=[['ISO week',wk],['Year',t.getUTCFullYear()],['Day of year',doy],['Quarter','Q'+(Math.floor(d.getMonth()/3)+1)]].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+T('workdays','time','Business Days','Working days between two dates','business working days weekday',root=>{
+  const today=new Date().toISOString().slice(0,10);
+  root.innerHTML=`<div class="row"><div class="field"><label>From</label><input class="inp" id="bd1" type="date" value="${today}"></div><div class="field"><label>To</label><input class="inp" id="bd2" type="date" value="2026-12-31"></div></div><div class="out"><div class="kv" id="bdo"></div></div>`;
+  const c=()=>{ let a=new Date($('#bd1',root).value),b=new Date($('#bd2',root).value); if(isNaN(a)||isNaN(b)){$('#bdo',root).innerHTML='';return;} if(a>b)[a,b]=[b,a];
+    let wd=0,we=0,tot=0; const d=new Date(a); while(d<=b){ const dow=d.getDay(); if(dow===0||dow===6)we++;else wd++; tot++; d.setDate(d.getDate()+1); }
+    $('#bdo',root).innerHTML=[['Total days',tot],['Business days',wd],['Weekend days',we]].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+
+/* ===== TEXT ===== */
+T('counter','text','Word & Character Counter','Counts words, characters, lines, read time','word character count lines reading time',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="wc" style="min-height:160px">The quick brown fox jumps over the lazy dog. Paste or type your text here to see live counts.</textarea></div><div class="out"><div class="kv" id="wo"></div></div>`;
+  const c=()=>{ const t=$('#wc',root).value; const words=(t.match(/\S+/g)||[]).length; const chars=t.length; const noSpace=t.replace(/\s/g,'').length; const lines=t?t.split(/\n/).length:0; const sentences=(t.match(/[.!?]+(\s|$)/g)||[]).length; const para=t.trim()?t.trim().split(/\n\s*\n/).length:0;
+    $('#wo',root).innerHTML=[['Words',words],['Characters',chars],['Characters (no spaces)',noSpace],['Sentences',sentences],['Paragraphs',para],['Lines',lines],['Reading time',Math.max(1,Math.round(words/200))+' min']].map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join(''); };
+  root.addEventListener('input',c); c();
+});
+T('case','text','Case Converter','UPPER, lower, Title, camelCase, snake_case…','case upper lower title camel snake kebab',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="csi">The Quick Brown Fox</textarea></div>
+   <div class="out"><div id="cso"></div></div>`;
+  const conv={
+    'UPPERCASE':s=>s.toUpperCase(),'lowercase':s=>s.toLowerCase(),
+    'Title Case':s=>s.replace(/\w\S*/g,w=>w[0].toUpperCase()+w.slice(1).toLowerCase()),
+    'Sentence case':s=>s.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g,m=>m.toUpperCase()),
+    'camelCase':s=>s.toLowerCase().replace(/[^a-z0-9]+(.)/g,(_,c)=>c.toUpperCase()).replace(/^[A-Z]/,c=>c.toLowerCase()),
+    'PascalCase':s=>s.toLowerCase().replace(/(^|[^a-z0-9]+)(.)/g,(_,__,c)=>c.toUpperCase()),
+    'snake_case':s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''),
+    'kebab-case':s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),
+    'CONSTANT_CASE':s=>s.trim().toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'')
+  };
+  const c=()=>{ const t=$('#csi',root).value; $('#cso',root).innerHTML=Object.entries(conv).map(([name,fn])=>{ const out=fn(t); const oid='cs_'+name.replace(/\W/g,''); return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--muted);width:120px;flex:none">${name}</span><span class="mono" id="${oid}" style="flex:1;min-width:0;word-break:break-word">${esc(out)||'—'}</span><button class="copy" data-copy="#${oid}">${COPYSVG}</button></div>`; }).join(''); };
+  root.addEventListener('input',c); c();
+});
+T('sortlines','text','Sort Lines','Alphabetical, reverse, numeric, shuffle','sort lines order alphabetical numeric',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="sli" style="min-height:120px">banana\napple\ncherry\ndate\nelderberry</textarea></div>
+   <div class="btns"><button class="btn sm" data-s="az">A → Z</button><button class="btn sm ghost" data-s="za">Z → A</button><button class="btn sm ghost" data-s="num">Numeric</button><button class="btn sm ghost" data-s="len">By length</button><button class="btn sm ghost" data-s="shuf">Shuffle</button></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">Output</span>${copyBtn('#slo')}</div><div id="slo"></div></div>`;
+  const run=mode=>{ let lines=$('#sli',root).value.split('\n'); const sorters={az:(a,b)=>a.localeCompare(b),za:(a,b)=>b.localeCompare(a),num:(a,b)=>parseFloat(a)-parseFloat(b),len:(a,b)=>a.length-b.length}; if(mode==='shuf'){ for(let i=lines.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[lines[i],lines[j]]=[lines[j],lines[i]];} } else lines.sort(sorters[mode]); $('#slo',root).textContent=lines.join('\n'); };
+  $$('[data-s]',root).forEach(b=>b.onclick=()=>run(b.dataset.s)); run('az');
+});
+T('dedupe','text','Remove Duplicate Lines','Keep unique lines, optionally trim/sort','duplicate dedupe unique remove lines',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="ddi" style="min-height:120px">apple\nbanana\napple\ncherry\nbanana\napple</textarea></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip" data-o="trim">Trim spaces</span><span class="chip" data-o="case">Ignore case</span><span class="chip" data-o="sort">Sort</span><span class="chip" data-o="empty">Drop blanks</span></div>
+   <div class="out mono"><div class="outhead"><span class="lbl" id="ddc">Output</span>${copyBtn('#ddo')}</div><div id="ddo"></div></div>`;
+  const opts={};
+  const run=()=>{ let lines=$('#ddi',root).value.split('\n'); if(opts.trim)lines=lines.map(l=>l.trim()); if(opts.empty)lines=lines.filter(l=>l.trim()); const seen=new Set(),out=[]; for(const l of lines){ const key=opts.case?l.toLowerCase():l; if(!seen.has(key)){seen.add(key);out.push(l);} } if(opts.sort)out.sort((a,b)=>a.localeCompare(b)); $('#ddo',root).textContent=out.join('\n'); $('#ddc',root).textContent=`${lines.length} in → ${out.length} unique`; };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ ch.classList.toggle('on'); opts[ch.dataset.o]=ch.classList.contains('on'); run(); });
+  $('#ddi',root).addEventListener('input',run); run();
+});
+T('findreplace','text','Find & Replace','Plain or regex replace across text','find replace regex substitute',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="fri">The cat sat on the mat. The cat was happy.</textarea></div>
+   <div class="row"><div class="field"><label>Find</label><input class="inp mono" id="frf" value="cat"></div><div class="field"><label>Replace</label><input class="inp mono" id="frr" value="dog"></div></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip" data-o="re">Regex</span><span class="chip on" data-o="ci">Case-insensitive</span><span class="chip on" data-o="g">All</span></div>
+   <div class="out mono"><div class="outhead"><span class="lbl" id="frc"></span>${copyBtn('#fro')}</div><div id="fro"></div></div>`;
+  const opts={ci:true,g:true};
+  const run=()=>{ const txt=$('#fri',root).value,f=$('#frf',root).value,r=$('#frr',root).value; if(!f){$('#fro',root).textContent=txt;return;}
+    try{ let flags=(opts.g?'g':'')+(opts.ci?'i':''); const pat=opts.re?new RegExp(f,flags):new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),flags); const count=(txt.match(pat)||[]).length; $('#fro',root).textContent=txt.replace(pat,r); $('#frc',root).innerHTML=`${count} replacement${count!==1?'s':''}`; }catch(e){ $('#fro',root).innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ ch.classList.toggle('on'); opts[ch.dataset.o]=ch.classList.contains('on'); run(); });
+  root.addEventListener('input',run); run();
+});
+T('reverse','text','Reverse Text','Reverse characters, words, or lines','reverse backwards flip text words',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="rvi">Hello World</textarea></div>
+   <div class="out"><div style="display:flex;flex-direction:column;gap:10px" id="rvo"></div></div>`;
+  const c=()=>{ const t=$('#rvi',root).value; const mk=(lbl,v,id)=>`<div style="display:flex;gap:10px;align-items:center"><span style="font-size:11px;color:var(--muted);width:90px;flex:none">${lbl}</span><span class="mono" id="${id}" style="flex:1;word-break:break-word">${esc(v)}</span><button class="copy" data-copy="#${id}">${COPYSVG}</button></div>`;
+    $('#rvo',root).innerHTML=mk('Characters',[...t].reverse().join(''),'rv1')+mk('Words',t.split(/\s+/).reverse().join(' '),'rv2')+mk('Lines',t.split('\n').reverse().join('\n'),'rv3'); };
+  root.addEventListener('input',c); c();
+});
+T('slugify','text','Slugify','URL-friendly slug from any text','slug url seo permalink',root=>{
+  root.innerHTML=`<div class="field"><label>Text</label><input class="inp" id="sgi" value="Hello World! This is My Post (2026)"></div><div class="out mono"><div class="outhead"><span class="lbl">Slug</span>${copyBtn('#sgo')}</div><div id="sgo"></div></div>`;
+  const c=()=>{ $('#sgo',root).textContent=$('#sgi',root).value.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'—'; };
+  $('#sgi',root).addEventListener('input',c); c();
+});
+T('lorem','text','Lorem Ipsum','Placeholder paragraphs, sentences, words','lorem ipsum placeholder dummy text filler',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Count</label><input class="inp" id="lmn" type="number" value="3" min="1"></div><div class="field"><label>Type</label><select class="inp" id="lmt"><option value="p">Paragraphs</option><option value="s">Sentences</option><option value="w">Words</option></select></div></div>
+   <button class="btn sm" id="lmg">Generate</button>
+   <div class="out mono"><div class="outhead"><span class="lbl">Output</span>${copyBtn('#lmo')}</div><div id="lmo" style="white-space:pre-wrap"></div></div>`;
+  const W='lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur excepteur sint occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum'.split(' ');
+  const rw=()=>W[Math.floor(Math.random()*W.length)];
+  const sentence=()=>{ const n=5+Math.floor(Math.random()*12); let s=Array.from({length:n},rw).join(' '); return s[0].toUpperCase()+s.slice(1)+'.'; };
+  const para=()=>Array.from({length:3+Math.floor(Math.random()*4)},sentence).join(' ');
+  const gen=()=>{ const n=Math.max(1,+$('#lmn',root).value),t=$('#lmt',root).value; let out; if(t==='p')out=Array.from({length:n},para).join('\n\n'); else if(t==='s')out=Array.from({length:n},sentence).join(' '); else out=Array.from({length:n},rw).join(' '); $('#lmo',root).textContent=out; };
+  $('#lmg',root).onclick=gen; gen();
+});
+T('trim','text','Whitespace Cleaner','Trim, collapse spaces, strip blank lines','whitespace trim clean spaces tabs blank',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="tri">  lots   of    messy\n\n\n   whitespace   here  </textarea></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip on" data-o="trim">Trim lines</span><span class="chip on" data-o="collapse">Collapse spaces</span><span class="chip on" data-o="blank">Remove blank lines</span><span class="chip" data-o="tabs">Tabs → spaces</span></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">Output</span>${copyBtn('#tro')}</div><div id="tro" style="white-space:pre-wrap"></div></div>`;
+  const opts={trim:true,collapse:true,blank:true};
+  const run=()=>{ let t=$('#tri',root).value; if(opts.tabs)t=t.replace(/\t/g,'  '); let lines=t.split('\n'); if(opts.trim)lines=lines.map(l=>l.trim()); if(opts.collapse)lines=lines.map(l=>l.replace(/ {2,}/g,' ')); if(opts.blank)lines=lines.filter(l=>l.trim()); $('#tro',root).textContent=lines.join('\n'); };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ ch.classList.toggle('on'); opts[ch.dataset.o]=ch.classList.contains('on'); run(); });
+  $('#tri',root).addEventListener('input',run); run();
+});
+T('striphtml','text','Strip HTML','Extract plain text from HTML markup','strip html tags plain text extract',root=>{
+  root.innerHTML=`<div class="field"><label>HTML input</label><textarea class="inp" id="shi">&lt;h1&gt;Title&lt;/h1&gt;&lt;p&gt;Some &lt;b&gt;bold&lt;/b&gt; text with a &lt;a href="#"&gt;link&lt;/a&gt;.&lt;/p&gt;</textarea></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">Plain text</span>${copyBtn('#sho')}</div><div id="sho" style="white-space:pre-wrap"></div></div>`;
+  const c=()=>{ const tmp=document.createElement('div'); tmp.innerHTML=$('#shi',root).value; $('#sho',root).textContent=(tmp.textContent||'').replace(/\n{3,}/g,'\n\n').trim(); };
+  $('#shi',root).addEventListener('input',c); c();
+});
+T('countoccur','text','Word Frequency','Rank most frequent words','frequency count occurrences words common',root=>{
+  root.innerHTML=`<div class="field"><textarea class="inp" id="coi" style="min-height:120px">the quick brown fox the lazy dog the fox runs and the dog sleeps the end</textarea></div>
+   <div class="scrollx"><table class="tbl"><thead><tr><th>Word</th><th>Count</th><th>%</th></tr></thead><tbody id="coo"></tbody></table></div>`;
+  const c=()=>{ const words=($('#coi',root).value.toLowerCase().match(/[a-z0-9']+/g)||[]); const f={}; words.forEach(w=>f[w]=(f[w]||0)+1); const sorted=Object.entries(f).sort((a,b)=>b[1]-a[1]).slice(0,25);
+    $('#coo',root).innerHTML=sorted.map(([w,n])=>`<tr><td>${esc(w)}</td><td class="num">${n}</td><td class="num">${fmt(n/words.length*100,1)}%</td></tr>`).join('')||'<tr><td>—</td></tr>'; };
+  $('#coi',root).addEventListener('input',c); c();
+});
+
+/* ===== ENCODE & CIPHER ===== */
+T('base64','encode','Base64','Encode and decode Base64','base64 encode decode b64',root=>{
+  root.innerHTML=`<div class="field"><label>Text</label><textarea class="inp" id="b64t">Hello, Toolbench!</textarea></div>
+   <div class="btns"><button class="btn sm" id="b64e">Encode →</button><button class="btn sm ghost" id="b64d">← Decode</button></div>
+   <div class="field"><label>Base64</label><textarea class="inp mono" id="b64b">SGVsbG8sIFRvb2xiZW5jaCE=</textarea></div>
+   <div class="btns">${copyBtn('#b64t','Copy text')}${copyBtn('#b64b','Copy base64')}</div>`;
+  $('#b64e',root).onclick=()=>{ try{ $('#b64b',root).value=btoa(unescape(encodeURIComponent($('#b64t',root).value))); }catch{flash('Encode failed');} };
+  $('#b64d',root).onclick=()=>{ try{ $('#b64t',root).value=decodeURIComponent(escape(atob($('#b64b',root).value.trim()))); }catch{flash('Invalid Base64');} };
+});
+T('urlenc','encode','URL Encode','Percent-encode / decode URLs','url encode decode percent escape uri',root=>{
+  root.innerHTML=`<div class="field"><label>Plain</label><textarea class="inp" id="uet">https://example.com/search?q=hello world&lang=en</textarea></div>
+   <div class="btns"><button class="btn sm" id="uee">Encode →</button><button class="btn sm ghost" id="ued">← Decode</button><span class="chip on" id="uecomp" style="margin-left:auto">encodeURIComponent</span></div>
+   <div class="field"><label>Encoded</label><textarea class="inp mono" id="ueo"></textarea></div><div class="btns">${copyBtn('#ueo','Copy encoded')}</div>`;
+  let comp=true; $('#uecomp',root).onclick=()=>{ comp=!comp; $('#uecomp',root).textContent=comp?'encodeURIComponent':'encodeURI'; };
+  $('#uee',root).onclick=()=>{ $('#ueo',root).value=comp?encodeURIComponent($('#uet',root).value):encodeURI($('#uet',root).value); };
+  $('#ued',root).onclick=()=>{ try{$('#uet',root).value=decodeURIComponent($('#ueo',root).value);}catch{flash('Invalid encoding');} };
+  $('#uee',root).click();
+});
+T('htmlent','encode','HTML Entities','Escape / unescape HTML entities','html entities escape unescape ampersand',root=>{
+  root.innerHTML=`<div class="field"><label>Text</label><textarea class="inp" id="het"><div class="box">5 > 3 & "quoted"</div></textarea></div>
+   <div class="btns"><button class="btn sm" id="hee">Escape →</button><button class="btn sm ghost" id="hed">← Unescape</button></div>
+   <div class="field"><label>Entities</label><textarea class="inp mono" id="heo"></textarea></div><div class="btns">${copyBtn('#heo','Copy')}</div>`;
+  $('#hee',root).onclick=()=>{ $('#heo',root).value=esc($('#het',root).value); };
+  $('#hed',root).onclick=()=>{ const t=document.createElement('textarea'); t.innerHTML=$('#heo',root).value; $('#het',root).value=t.value; };
+  $('#hee',root).click();
+});
+T('binary','encode','Text ↔ Binary','Convert text to 8-bit binary and back','binary text ascii bits convert',root=>{
+  root.innerHTML=`<div class="field"><label>Text</label><textarea class="inp" id="bnt">Hi</textarea></div>
+   <div class="btns"><button class="btn sm" id="bne">Text → Binary</button><button class="btn sm ghost" id="bnd">Binary → Text</button></div>
+   <div class="field"><label>Binary</label><textarea class="inp mono" id="bno"></textarea></div><div class="btns">${copyBtn('#bno','Copy')}</div>`;
+  $('#bne',root).onclick=()=>{ $('#bno',root).value=[...$('#bnt',root).value].map(c=>c.charCodeAt(0).toString(2).padStart(8,'0')).join(' '); };
+  $('#bnd',root).onclick=()=>{ try{ $('#bnt',root).value=$('#bno',root).value.trim().split(/\s+/).map(b=>String.fromCharCode(parseInt(b,2))).join(''); }catch{flash('Invalid binary');} };
+  $('#bne',root).click();
+});
+T('morse','encode','Morse Code','Translate text ↔ Morse','morse code dot dash telegraph',root=>{
+  const M={A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..','0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....','6':'-....','7':'--...','8':'---..','9':'----.','.':'.-.-.-',',':'--..--','?':'..--..',"'":'.----.','!':'-.-.--','/':'-..-.','(':'-.--.',')':'-.--.-','&':'.-...',':':'---...',';':'-.-.-.','=':'-...-','+':'.-.-.','-':'-....-','_':'..--.-','"':'.-..-.','@':'.--.-.',' ':'/'};
+  const R=Object.fromEntries(Object.entries(M).map(([k,v])=>[v,k]));
+  root.innerHTML=`<div class="field"><label>Text</label><textarea class="inp" id="mot">SOS Toolbench</textarea></div>
+   <div class="btns"><button class="btn sm" id="moe">Text → Morse</button><button class="btn sm ghost" id="mod">Morse → Text</button></div>
+   <div class="field"><label>Morse</label><textarea class="inp mono" id="moo"></textarea></div><div class="btns">${copyBtn('#moo','Copy')}</div>`;
+  $('#moe',root).onclick=()=>{ $('#moo',root).value=[...$('#mot',root).value.toUpperCase()].map(c=>M[c]??'').join(' ').replace(/\s*\/\s*/g,' / '); };
+  $('#mod',root).onclick=()=>{ $('#mot',root).value=$('#moo',root).value.trim().split(' ').map(c=>c==='/'?' ':R[c]??'').join(''); };
+  $('#moe',root).click();
+});
+T('rot13','encode','ROT13 / Caesar','Shift-cipher with adjustable key','rot13 caesar cipher shift encrypt',root=>{
+  root.innerHTML=`<div class="field"><label>Text</label><textarea class="inp" id="roi">The quick brown fox</textarea></div>
+   <div class="field"><label>Shift: <b id="roshow">13</b></label><input type="range" id="ros" min="0" max="25" value="13" style="width:100%"></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">Output</span>${copyBtn('#roo')}</div><div id="roo" style="white-space:pre-wrap"></div></div>`;
+  const c=()=>{ const s=+$('#ros',root).value; $('#roshow',root).textContent=s; $('#roo',root).textContent=$('#roi',root).value.replace(/[a-z]/gi,ch=>{const b=ch<='Z'?65:97;return String.fromCharCode((ch.charCodeAt(0)-b+s)%26+b);}); };
+  root.addEventListener('input',c); c();
+});
+T('hash','encode','Hash Generator','SHA-1, SHA-256, SHA-384, SHA-512','hash sha256 sha1 sha512 checksum digest',root=>{
+  root.innerHTML=`<div class="field"><label>Input text</label><textarea class="inp" id="hi">Hello, Toolbench!</textarea></div>
+   <div class="out mono"><div id="ho"></div></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Uses the browser's native SubtleCrypto. MD5 isn't available (not a secure hash) — these are cryptographic SHA digests.</div>`;
+  const algos=['SHA-1','SHA-256','SHA-384','SHA-512'];
+  const c=async()=>{ const data=new TextEncoder().encode($('#hi',root).value); const rows=[];
+    for(const a of algos){ const buf=await crypto.subtle.digest(a,data); const hex=[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join(''); const id='h_'+a.replace(/\W/g,''); rows.push(`<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--muted);font-weight:600">${a}</span><button class="copy" data-copy="#${id}">${COPYSVG}</button></div><div id="${id}" style="word-break:break-all;margin-top:4px;font-size:12px">${hex}</div></div>`); }
+    $('#ho',root).innerHTML=rows.join(''); };
+  $('#hi',root).addEventListener('input',()=>{clearTimeout(root.__t);root.__t=setTimeout(c,150);}); c();
+});
+T('jwt','encode','JWT Decoder','Decode JSON Web Token header & payload','jwt json web token decode auth bearer',root=>{
+  root.innerHTML=`<div class="field"><label>JWT</label><textarea class="inp mono" id="ji" style="min-height:90px">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlRvb2xiZW5jaCIsImlhdCI6MTc2MDQ0MzcwMH0.abc</textarea></div>
+   <div class="field"><label>Header</label><div class="out mono" id="jh"></div></div>
+   <div class="field"><label>Payload</label><div class="out mono" id="jp"></div></div>
+   <div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Decodes only — signature is not verified. Never paste production secrets.</div>`;
+  const dec=s=>{ try{ return JSON.stringify(JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))))),null,2); }catch{ return null; } };
+  const c=()=>{ const parts=$('#ji',root).value.trim().split('.'); const h=dec(parts[0]||''),p=dec(parts[1]||''); $('#jh',root).innerHTML=h?esc(h):'<span class="err">invalid</span>'; let pp=p; if(p){ try{const o=JSON.parse(p); if(o.exp)pp=p.replace(/}$/,`\n  // exp: ${new Date(o.exp*1000).toLocaleString()}\n}`);}catch{} } $('#jp',root).innerHTML=pp?esc(pp):'<span class="err">invalid</span>'; };
+  $('#ji',root).addEventListener('input',c); c();
+});
+
+/* ===== DEVELOPER ===== */
+T('json','dev','JSON Formatter','Validate, pretty-print, with error line','json format validate pretty beautify lint',root=>{
+  root.innerHTML=`<div class="field"><label>JSON</label><textarea class="inp mono" id="ji2" style="min-height:140px">{"name":"Toolbench","tools":90,"tags":["calc","convert"],"nested":{"ok":true}}</textarea></div>
+   <div class="btns"><button class="btn sm" id="jf">Format</button><button class="btn sm ghost" id="jm">Minify</button><span class="lbl" id="jstat" style="margin-left:auto;align-self:center"></span></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">Output</span>${copyBtn('#jo')}</div><div id="jo" style="white-space:pre-wrap"></div></div>`;
+  const parse=()=>{ try{ const o=JSON.parse($('#ji2',root).value); $('#jstat',root).innerHTML='<span class="ok">valid</span>'; return o; }catch(e){ $('#jstat',root).innerHTML='<span class="err">'+esc(e.message)+'</span>'; return undefined; } };
+  $('#jf',root).onclick=()=>{ const o=parse(); if(o!==undefined)$('#jo',root).textContent=JSON.stringify(o,null,2); };
+  $('#jm',root).onclick=()=>{ const o=parse(); if(o!==undefined)$('#jo',root).textContent=JSON.stringify(o); };
+  $('#ji2',root).addEventListener('input',()=>{const o=parse();if(o!==undefined)$('#jo',root).textContent=JSON.stringify(o,null,2);}); $('#jf',root).click();
+});
+T('jsonmin','dev','JSON ↔ Minify','Compact or expand with size saved','json minify compress compact whitespace',root=>{
+  root.innerHTML=`<div class="field"><label>Input</label><textarea class="inp mono" id="jmi" style="min-height:120px">{\n  "a": 1,\n  "b": [1, 2, 3],\n  "c": "hello"\n}</textarea></div>
+   <div class="out mono"><div class="outhead"><span class="lbl" id="jmc"></span>${copyBtn('#jmo')}</div><div id="jmo" style="white-space:pre-wrap"></div></div>`;
+  const c=()=>{ try{ const o=JSON.parse($('#jmi',root).value); const min=JSON.stringify(o); const orig=$('#jmi',root).value.length; $('#jmo',root).textContent=min; $('#jmc',root).innerHTML=`<span class="ok">${orig} → ${min.length} bytes (saved ${fmt((1-min.length/orig)*100,1)}%)</span>`; }catch(e){ $('#jmo',root).innerHTML='<span class="err">'+esc(e.message)+'</span>'; $('#jmc',root).textContent=''; } };
+  $('#jmi',root).addEventListener('input',c); c();
+});
+T('csvjson','dev','CSV → JSON','Convert CSV (with headers) to JSON','csv json convert table parse',root=>{
+  root.innerHTML=`<div class="field"><label>CSV</label><textarea class="inp mono" id="cji" style="min-height:120px">name,role,age\nAlice,Engineer,34\nBob,Designer,29\nCarol,"PM, Lead",41</textarea></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">JSON</span>${copyBtn('#cjo')}</div><div id="cjo" style="white-space:pre-wrap"></div></div>`;
+  function parseCSV(text){ const rows=[]; let row=[],cur='',q=false; for(let i=0;i<text.length;i++){ const c=text[i]; if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; } else { if(c==='"')q=true; else if(c===','){row.push(cur);cur='';} else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';} else if(c==='\r'){} else cur+=c; } } if(cur!==''||row.length){row.push(cur);rows.push(row);} return rows; }
+  const c=()=>{ try{ const rows=parseCSV($('#cji',root).value.trim()); if(!rows.length){$('#cjo',root).textContent='[]';return;} const head=rows[0]; const out=rows.slice(1).map(r=>Object.fromEntries(head.map((h,i)=>{ let v=r[i]??''; if(v!==''&&!isNaN(v)&&v.trim()!=='')v=Number(v); return [h,v]; }))); $('#cjo',root).textContent=JSON.stringify(out,null,2); }catch(e){$('#cjo',root).innerHTML='<span class="err">'+esc(e.message)+'</span>';} };
+  $('#cji',root).addEventListener('input',c); c();
+});
+T('jsoncsv','dev','JSON → CSV','Flatten array of objects to CSV','json csv convert export table',root=>{
+  root.innerHTML=`<div class="field"><label>JSON (array of objects)</label><textarea class="inp mono" id="jci" style="min-height:120px">[{"name":"Alice","age":34},{"name":"Bob","age":29,"city":"SG"}]</textarea></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">CSV</span>${copyBtn('#jco')}</div><div id="jco" style="white-space:pre-wrap"></div></div>
+   <button class="btn sm ghost" id="jcdl" style="margin-top:10px">Download .csv</button>`;
+  const esc2=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const c=()=>{ try{ const a=JSON.parse($('#jci',root).value); if(!Array.isArray(a))throw new Error('Expected an array'); const cols=[...new Set(a.flatMap(o=>Object.keys(o)))]; const csv=[cols.join(','),...a.map(o=>cols.map(k=>esc2(o[k])).join(','))].join('\n'); $('#jco',root).textContent=csv; root.__csv=csv; }catch(e){$('#jco',root).innerHTML='<span class="err">'+esc(e.message)+'</span>';} };
+  $('#jcdl',root).onclick=()=>download('data.csv',root.__csv||'','text/csv');
+  $('#jci',root).addEventListener('input',c); c();
+});
+T('uuid','dev','UUID Generator','Generate v4 UUIDs in bulk','uuid guid v4 random identifier',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>How many</label><input class="inp" id="uc" type="number" value="5" min="1" max="500"></div></div>
+   <div class="btns"><button class="btn sm" id="ug">Generate</button>${copyBtn('#uo','Copy all')}</div>
+   <div class="out mono" id="uo" style="white-space:pre-wrap"></div>`;
+  const uuid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&0x3|0x8)).toString(16);});
+  const g=()=>{ const n=Math.min(500,Math.max(1,+$('#uc',root).value)); $('#uo',root).textContent=Array.from({length:n},uuid).join('\n'); };
+  $('#ug',root).onclick=g; g();
+});
+T('regex','dev','Regex Tester','Test a pattern with live matches','regex regexp pattern match test expression',root=>{
+  root.innerHTML=`<div class="field"><label>Pattern</label><div class="row"><input class="inp mono" id="rxp" value="\\b\\w+@\\w+\\.\\w+\\b" style="flex:3"><input class="inp mono" id="rxf" value="gi" style="flex:0 0 70px" placeholder="flags"></div></div>
+   <div class="field"><label>Test string</label><textarea class="inp" id="rxs">Contact alice@test.com or bob@mail.org for details.</textarea></div>
+   <div class="out"><div class="outhead"><span class="lbl" id="rxc"></span></div><div class="mono" id="rxo" style="white-space:pre-wrap"></div></div>`;
+  const c=()=>{ try{ const re=new RegExp($('#rxp',root).value,$('#rxf',root).value); const s=$('#rxs',root).value; const matches=[...s.matchAll(re.flags.includes('g')?re:new RegExp(re.source,re.flags+'g'))]; $('#rxc',root).innerHTML=`<span class="ok">${matches.length} match${matches.length!==1?'es':''}</span>`;
+    let html='',last=0; for(const m of matches){ html+=esc(s.slice(last,m.index))+'<mark style="background:var(--accent-wash);color:var(--accent-2);border-radius:3px">'+esc(m[0])+'</mark>'; last=m.index+m[0].length; } html+=esc(s.slice(last)); $('#rxo',root).innerHTML=html||esc(s);
+  }catch(e){ $('#rxc',root).innerHTML='<span class="err">'+esc(e.message)+'</span>'; $('#rxo',root).textContent=$('#rxs',root).value; } };
+  root.addEventListener('input',c); c();
+});
+T('markdown','dev','Markdown Preview','Live render Markdown to HTML','markdown md preview render html',root=>{
+  root.innerHTML=`<div class="field"><label>Markdown</label><textarea class="inp mono" id="mdi" style="min-height:140px"># Toolbench\n\nA **Markdown** preview with:\n\n- Live rendering\n- \`inline code\`\n- [links](https://example.com)\n\n> Blockquotes too.\n\n1. First\n2. Second</textarea></div>
+   <div class="field"><label>Preview</label><div class="out" id="mdo" style="line-height:1.6"></div></div>`;
+  const c=()=>{ try{ $('#mdo',root).innerHTML = window.marked? marked.parse($('#mdi',root).value):esc($('#mdi',root).value); }catch{ $('#mdo',root).textContent='render error'; } };
+  $('#mdi',root).addEventListener('input',c); c();
+});
+T('querystring','dev','Query String Parser','Break a URL into its parameters','query string url params parse querystring',root=>{
+  root.innerHTML=`<div class="field"><label>URL or query string</label><input class="inp mono" id="qsi" value="https://shop.com/search?q=laptop&sort=price&page=2&color=black"></div>
+   <div class="scrollx"><table class="tbl"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody id="qso"></tbody></table></div>`;
+  const c=()=>{ let s=$('#qsi',root).value; const qi=s.indexOf('?'); if(qi>=0)s=s.slice(qi+1); const params=new URLSearchParams(s); const rows=[...params.entries()]; $('#qso',root).innerHTML=rows.length?rows.map(([k,v])=>`<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`).join(''):'<tr><td>—</td><td></td></tr>'; };
+  $('#qsi',root).addEventListener('input',c); c();
+});
+T('diff','dev','Text Diff','Line-by-line comparison of two texts','diff compare difference text changes',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Original</label><textarea class="inp mono" id="dfa" style="min-height:140px">line one\nline two\nline three\nline four</textarea></div>
+   <div class="field"><label>Changed</label><textarea class="inp mono" id="dfb" style="min-height:140px">line one\nline 2\nline three\nline four\nline five</textarea></div></div>
+   <div class="out mono" id="dfo" style="white-space:pre-wrap;line-height:1.6"></div>`;
+  function lcsDiff(a,b){ const n=a.length,m=b.length; const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0)); for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]); const res=[]; let i=0,j=0; while(i<n&&j<m){ if(a[i]===b[j]){res.push(['=',a[i]]);i++;j++;} else if(dp[i+1][j]>=dp[i][j+1]){res.push(['-',a[i]]);i++;} else {res.push(['+',b[j]]);j++;} } while(i<n)res.push(['-',a[i++]]); while(j<m)res.push(['+',b[j++]]); return res; }
+  const c=()=>{ const d=lcsDiff($('#dfa',root).value.split('\n'),$('#dfb',root).value.split('\n')); $('#dfo',root).innerHTML=d.map(([t,l])=>{ const col=t==='+'?'var(--good)':t==='-'?'var(--bad)':'var(--muted)'; const bg=t==='+'?'rgba(34,197,94,.08)':t==='-'?'rgba(239,68,68,.08)':'transparent'; return `<div style="color:${col};background:${bg};padding:0 4px">${t==='='?' ':t} ${esc(l)}</div>`; }).join(''); };
+  root.addEventListener('input',c); c();
+});
+
+/* ===== GENERATORS ===== */
+T('password','gen','Password Generator','Strong random passwords, your rules','password generator random secure strong',root=>{
+  root.innerHTML=`<div class="out" style="text-align:center;padding:20px"><div class="mono" id="po" style="font-size:20px;word-break:break-all"></div><div class="sub" id="pstr" style="margin-top:8px"></div></div>
+   <div class="btns" style="justify-content:center">${copyBtn('#po','Copy')}<button class="btn sm" id="pgen">Regenerate</button></div>
+   <div class="field"><label>Length: <b id="plen">16</b></label><input type="range" id="pr" min="6" max="64" value="16" style="width:100%"></div>
+   <div class="chips"><span class="chip on" data-o="upper">A-Z</span><span class="chip on" data-o="lower">a-z</span><span class="chip on" data-o="num">0-9</span><span class="chip on" data-o="sym">!@#$</span><span class="chip" data-o="noamb">No look-alikes</span></div>`;
+  const opts={upper:true,lower:true,num:true,sym:true};
+  const gen=()=>{ let U='ABCDEFGHIJKLMNOPQRSTUVWXYZ',l='abcdefghijklmnopqrstuvwxyz',n='0123456789',s='!@#$%^&*()-_=+[]{};:,.<>?'; if(opts.noamb){U=U.replace(/[IO]/g,'');l=l.replace(/[lo]/g,'');n=n.replace(/[01]/g,'');} let pool=''; if(opts.upper)pool+=U; if(opts.lower)pool+=l; if(opts.num)pool+=n; if(opts.sym)pool+=s; if(!pool){$('#po',root).textContent='select a set';return;}
+    const len=+$('#pr',root).value; const arr=new Uint32Array(len); crypto.getRandomValues(arr); let pw=''; for(let i=0;i<len;i++)pw+=pool[arr[i]%pool.length]; $('#po',root).textContent=pw;
+    const sets=[opts.upper,opts.lower,opts.num,opts.sym].filter(Boolean).length; const entropy=len*Math.log2(pool.length); const str=entropy<40?['Weak','err']:entropy<70?['Fair','wn']:entropy<100?['Strong','ok']:['Very strong','ok']; $('#pstr',root).innerHTML=`<span class="${str[1]}">${str[0]}</span> · ~${Math.round(entropy)} bits entropy`; };
+  $('#pr',root).addEventListener('input',()=>{$('#plen',root).textContent=$('#pr',root).value;gen();});
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ch.classList.toggle('on');opts[ch.dataset.o]=ch.classList.contains('on');gen();});
+  $('#pgen',root).onclick=gen; gen();
+});
+T('qr','gen','QR Code Generator','Make a QR code from text or URL','qr code generator barcode url scan',root=>{
+  root.innerHTML=`<div class="field"><label>Content</label><textarea class="inp" id="qri">https://github.com</textarea></div>
+   <div class="row"><div class="field"><label>Size</label><input class="inp" id="qrs" type="number" value="240" min="80" max="600"></div></div>
+   <div class="out" style="text-align:center;padding:20px"><div id="qrbox" style="display:inline-block;background:#fff;padding:12px;border-radius:8px"></div></div>
+   <button class="btn sm ghost" id="qrdl" style="margin-top:10px">Download PNG</button>`;
+  const box=$('#qrbox',root); let qr;
+  const gen=()=>{ box.innerHTML=''; if(!window.QRCode){box.innerHTML='<span style="color:#000">QR library loading…</span>';return;} try{ qr=new QRCode(box,{text:$('#qri',root).value||' ',width:+$('#qrs',root).value,height:+$('#qrs',root).value,correctLevel:QRCode.CorrectLevel.M}); }catch{} };
+  $('#qrdl',root).onclick=()=>{ const cv=box.querySelector('canvas'),img=box.querySelector('img'); const src=cv?cv.toDataURL():(img?img.src:null); if(!src){flash('Nothing to download');return;} fetch(src).then(r=>r.blob()).then(b=>download('qrcode.png',b,'image/png')).catch(()=>{ const a=document.createElement('a');a.href=src;a.download='qrcode.png';a.click(); }); };
+  let t; root.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(gen,200);});
+  setTimeout(gen,window.QRCode?0:400);
+});
+T('color','gen','Color Converter','HEX ↔ RGB ↔ HSL with picker','color hex rgb hsl converter picker',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Pick</label><input type="color" id="clp" value="#0d9488" style="width:100%;height:42px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer"></div>
+   <div class="field"><label>HEX</label><input class="inp mono" id="clh" value="#0d9488"></div></div>
+   <span class="swatch" id="clsw" style="background:#0d9488"></span>
+   <div class="out" style="margin-top:12px"><div class="kv">
+     <div class="k">HEX</div><div class="v" id="v_hex"></div>
+     <div class="k">RGB</div><div class="v" id="v_rgb"></div>
+     <div class="k">HSL</div><div class="v" id="v_hsl"></div>
+   </div></div>`;
+  const toRGB=h=>{ h=h.replace('#',''); if(h.length===3)h=[...h].map(c=>c+c).join(''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; };
+  const toHSL=(r,g,b)=>{ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let h,s,l=(mx+mn)/2; if(mx===mn){h=s=0;}else{const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h/=6;} return [Math.round(h*360),Math.round(s*100),Math.round(l*100)]; };
+  const upd=hex=>{ if(!/^#?[0-9a-f]{3,6}$/i.test(hex))return; if(hex[0]!=='#')hex='#'+hex; const [r,g,b]=toRGB(hex); const [h,s,l]=toHSL(r,g,b); $('#clsw',root).style.background=hex; $('#clp',root).value=hex.length===7?hex:'#0d9488'; $('#v_hex',root).textContent=hex.toUpperCase(); $('#v_rgb',root).textContent=`rgb(${r}, ${g}, ${b})`; $('#v_hsl',root).textContent=`hsl(${h}, ${s}%, ${l}%)`; };
+  $('#clp',root).addEventListener('input',e=>{$('#clh',root).value=e.target.value;upd(e.target.value);});
+  $('#clh',root).addEventListener('input',e=>upd(e.target.value)); upd('#0d9488');
+});
+T('gradient','gen','CSS Gradient','Build a gradient and copy the CSS','css gradient linear background color',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Color 1</label><input type="color" id="g1" value="#0d9488" style="width:100%;height:40px;border:1px solid var(--border);border-radius:8px;cursor:pointer"></div>
+   <div class="field"><label>Color 2</label><input type="color" id="g2" value="#6366f1" style="width:100%;height:40px;border:1px solid var(--border);border-radius:8px;cursor:pointer"></div>
+   <div class="field"><label>Angle: <b id="gashow">90</b>°</label><input type="range" id="ga" min="0" max="360" value="90" style="width:100%"></div></div>
+   <div id="gprev" style="height:120px;border-radius:var(--radius);border:1px solid var(--border);margin:8px 0"></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">CSS</span>${copyBtn('#gcss')}</div><div id="gcss"></div></div>`;
+  const c=()=>{ const css=`linear-gradient(${$('#ga',root).value}deg, ${$('#g1',root).value}, ${$('#g2',root).value})`; $('#gprev',root).style.background=css; $('#gcss',root).textContent='background: '+css+';'; $('#gashow',root).textContent=$('#ga',root).value; };
+  root.addEventListener('input',c); c();
+});
+T('shadow','gen','Box Shadow','Design a CSS box-shadow visually','css box shadow depth elevation',root=>{
+  root.innerHTML=`<div class="row row3"><div class="field"><label>X: <b id="sxv">0</b></label><input type="range" id="sx" min="-40" max="40" value="0"></div><div class="field"><label>Y: <b id="syv">10</b></label><input type="range" id="sy" min="-40" max="40" value="10"></div></div>
+   <div class="row row3"><div class="field"><label>Blur: <b id="sbv">24</b></label><input type="range" id="sb" min="0" max="80" value="24"></div><div class="field"><label>Spread: <b id="ssv">-4</b></label><input type="range" id="ss" min="-40" max="40" value="-4"></div><div class="field"><label>Opacity: <b id="sov">18</b>%</label><input type="range" id="so" min="0" max="100" value="18"></div></div>
+   <div style="display:grid;place-items:center;padding:30px"><div id="sprev" style="width:120px;height:120px;background:var(--surface);border-radius:14px"></div></div>
+   <div class="out mono"><div class="outhead"><span class="lbl">CSS</span>${copyBtn('#scss')}</div><div id="scss"></div></div>`;
+  const c=()=>{ const g=id=>$('#'+id,root).value; ['sx','sy','sb','ss','so'].forEach(id=>$('#'+id+'v',root).textContent=g(id)); const css=`${g('sx')}px ${g('sy')}px ${g('sb')}px ${g('ss')}px rgba(0,0,0,${(g('so')/100).toFixed(2)})`; $('#sprev',root).style.boxShadow=css; $('#scss',root).textContent='box-shadow: '+css+';'; };
+  root.addEventListener('input',c); c();
+});
+T('palette','gen','Color Palette','Random harmonious 5-color palette','palette colors scheme random harmony design',root=>{
+  root.innerHTML=`<div class="btns"><button class="btn sm" id="palg">New palette</button></div><div class="pal" id="palo"></div><div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Click any swatch to copy its hex. Built from a random base hue with analogous + tonal variation.</div>`;
+  const hsl2hex=(h,s,l)=>{ l/=100; const a=s*Math.min(l,1-l)/100; const f=n=>{const k=(n+h/30)%12;const c=l-a*Math.max(Math.min(k-3,9-k,1),-1);return Math.round(255*c).toString(16).padStart(2,'0');}; return '#'+f(0)+f(8)+f(4); };
+  const gen=()=>{ const base=Math.floor(Math.random()*360); const cols=[hsl2hex(base,70,40),hsl2hex((base+20)%360,65,55),hsl2hex((base+40)%360,60,68),hsl2hex(base,30,88),hsl2hex((base+200)%360,55,50)]; $('#palo',root).innerHTML=cols.map(c=>{ const dark=parseInt(c.slice(1),16)<0x888888; return `<div class="c" data-copy="${c}" style="background:${c};color:${dark?'#fff':'#000'}">${c}</div>`; }).join(''); };
+  $('#palg',root).onclick=gen; gen();
+});
+T('randnum','gen','Random Number','Random integers in a range','random number generator range integer',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>Min</label><input class="inp" id="rnmin" type="number" value="1"></div><div class="field"><label>Max</label><input class="inp" id="rnmax" type="number" value="100"></div><div class="field"><label>How many</label><input class="inp" id="rnc" type="number" value="1" min="1"></div></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip" data-o="uniq">Unique only</span></div>
+   <div class="btns"><button class="btn" id="rng">Generate</button>${copyBtn('#rno','Copy')}</div>
+   <div class="out"><div class="big" id="rno" style="word-break:break-word">—</div></div>`;
+  let uniq=false; $('.chip',root).onclick=e=>{e.target.classList.toggle('on');uniq=e.target.classList.contains('on');};
+  const g=()=>{ let min=Math.ceil(+$('#rnmin',root).value),max=Math.floor(+$('#rnmax',root).value); if(min>max)[min,max]=[max,min]; const n=Math.max(1,+$('#rnc',root).value); let nums=[]; if(uniq){ const pool=[]; for(let i=min;i<=max;i++)pool.push(i); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];} nums=pool.slice(0,n); } else { for(let i=0;i<n;i++)nums.push(Math.floor(Math.random()*(max-min+1))+min); } $('#rno',root).textContent=nums.join(', '); };
+  $('#rng',root).onclick=g; g();
+});
+T('dice','gen','Dice Roller','Roll any dice: 2d6, d20, etc.','dice roll d20 rpg random tabletop',root=>{
+  root.innerHTML=`<div class="field"><label>Notation (e.g. 2d6+3)</label><input class="inp mono" id="dcn" value="2d6"></div>
+   <div class="chips" style="margin-bottom:12px">${['d4','d6','d8','d10','d12','d20','d100','2d6'].map(d=>`<span class="chip" data-d="${d}">${d}</span>`).join('')}</div>
+   <button class="btn" id="dcr">Roll</button>
+   <div class="out" style="text-align:center;margin-top:12px"><div class="big" id="dco">—</div><div class="sub" id="dcd"></div></div>`;
+  const roll=()=>{ const m=$('#dcn',root).value.trim().match(/^(\d*)d(\d+)([+-]\d+)?$/i); if(!m){$('#dco',root).textContent='?';$('#dcd',root).textContent='Format: NdM+K';return;} const n=+(m[1]||1),sides=+m[2],mod=+(m[3]||0); const rolls=Array.from({length:n},()=>Math.floor(Math.random()*sides)+1); const sum=rolls.reduce((a,b)=>a+b,0)+mod; $('#dco',root).textContent=sum; $('#dcd',root).textContent=`${rolls.join(' + ')}${mod?(' '+(mod>0?'+':'−')+' '+Math.abs(mod)):''}`; };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{$('#dcn',root).value=ch.dataset.d;roll();});
+  $('#dcr',root).onclick=roll; roll();
+});
+T('coin','gen','Coin Flip','Flip one or many coins','coin flip heads tails random toss',root=>{
+  root.innerHTML=`<div class="row"><div class="field"><label>How many</label><input class="inp" id="cfn" type="number" value="1" min="1" max="10000"></div></div>
+   <button class="btn" id="cff">Flip</button>
+   <div class="out" style="text-align:center;margin-top:12px"><div class="big" id="cfo">—</div><div class="sub" id="cfd"></div></div>`;
+  const f=()=>{ const n=Math.max(1,+$('#cfn',root).value); let h=0; for(let i=0;i<n;i++)if(Math.random()<.5)h++; if(n===1){$('#cfo',root).textContent=h?'Heads':'Tails';$('#cfd',root).textContent='';}else{$('#cfo',root).textContent=`${h} / ${n-h}`;$('#cfd',root).textContent=`${h} heads, ${n-h} tails (${fmt(h/n*100,1)}% heads)`;} };
+  $('#cff',root).onclick=f; f();
+});
+T('username','gen','Username Generator','Memorable handles from word pairs','username handle name generator random nickname',root=>{
+  const adj='swift silent cosmic rapid golden silver crimson azure quiet bold lunar solar electric mystic frost ember noble wild amber coral'.split(' ');
+  const noun='falcon otter cedar comet harbor nova pixel orbit willow raven delta quartz maple onyx summit ridge drift cove flint sage'.split(' ');
+  root.innerHTML=`<div class="chips" style="margin-bottom:12px"><span class="chip on" data-o="num">Add numbers</span><span class="chip" data-o="cap">Capitalise</span><span class="chip" data-o="us">Underscore</span></div>
+   <button class="btn sm" id="ung">Generate 8</button>
+   <div class="out mono" id="uno" style="white-space:pre-wrap"></div>`;
+  const opts={num:true};
+  const one=()=>{ const sep=opts.us?'_':''; let a=adj[Math.random()*adj.length|0],n=noun[Math.random()*noun.length|0]; if(opts.cap){a=a[0].toUpperCase()+a.slice(1);n=n[0].toUpperCase()+n.slice(1);} return a+sep+n+(opts.num?(Math.random()*90+10|0):''); };
+  const g=()=>{ $('#uno',root).textContent=Array.from({length:8},one).join('\n'); };
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ch.classList.toggle('on');opts[ch.dataset.o]=ch.classList.contains('on');g();});
+  $('#ung',root).onclick=g; g();
+});
+
+/* ===== FILES & MEDIA ===== */
+const DLNOTE=`<div class="note">${ico('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/>')}Everything runs in your browser — files never upload anywhere. Downloads are blocked inside the preview sandbox but work once you host this on your own domain.</div>`;
+function dropUI(id,accept,label){ return `<label class="filedrop" id="${id}drop"><input type="file" id="${id}" accept="${accept}" hidden ${accept.includes('pdf')?'':''}>${label}</label>`; }
+function wireDrop(root,id,onFiles,multiple){ const inp=$('#'+id,root),dz=$('#'+id+'drop',root); if(multiple)inp.multiple=true; inp.onchange=()=>onFiles([...inp.files]); dz.ondragover=e=>{e.preventDefault();dz.classList.add('over');}; dz.ondragleave=()=>dz.classList.remove('over'); dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');onFiles([...e.dataTransfer.files]);}; }
+
+T('pdfmerge','file','PDF Merge','Combine multiple PDFs into one','pdf merge combine join append',root=>{
+  root.innerHTML=`${dropUI('pm','application/pdf','<b>Drop PDF files here</b><br><small>or click to choose — order = selection order</small>')}
+   <div class="pagelist" id="pmlist"></div>
+   <button class="btn" id="pmgo" disabled>Merge & download</button>${DLNOTE}`;
+  let files=[];
+  const render=()=>{ $('#pmlist',root).innerHTML=files.map((f,i)=>`<div class="pagerow"><span class="pn">${i+1}</span><span class="nm">${esc(f.name)}</span><button data-up="${i}">↑</button><button data-x="${i}">✕</button></div>`).join(''); $('#pmgo',root).disabled=files.length<1;
+    $$('[data-up]',root).forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]];render();}});
+    $$('[data-x]',root).forEach(b=>b.onclick=()=>{files.splice(+b.dataset.x,1);render();}); };
+  wireDrop(root,'pm',fs=>{ files.push(...fs.filter(f=>f.type==='application/pdf'||f.name.endsWith('.pdf'))); render(); },true);
+  $('#pmgo',root).onclick=async()=>{ if(!window.PDFLib){flash('PDF library loading…');return;} try{ const {PDFDocument}=PDFLib; const out=await PDFDocument.create(); for(const f of files){ const bytes=await f.arrayBuffer(); const src=await PDFDocument.load(bytes,{ignoreEncryption:true}); const pages=await out.copyPages(src,src.getPageIndices()); pages.forEach(p=>out.addPage(p)); } const blob=new Blob([await out.save()],{type:'application/pdf'}); download('merged.pdf',blob,'application/pdf'); flash(`Merged ${files.length} files`); }catch(e){ flash('Merge failed: '+e.message); } };
+});
+T('pdftools','file','PDF Page Tools','Delete, rotate, reorder pages','pdf pages rotate delete reorder split remove',root=>{
+  root.innerHTML=`${dropUI('pt','application/pdf','<b>Drop a PDF here</b><br><small>or click to choose</small>')}
+   <div class="pagelist" id="ptlist"></div>
+   <button class="btn" id="ptgo" disabled>Build & download</button>${DLNOTE}`;
+  let doc=null,pages=[]; // pages: {idx, rot}
+  wireDrop(root,'pt',async fs=>{ const f=fs.find(f=>f.type==='application/pdf'||f.name.endsWith('.pdf')); if(!f||!window.PDFLib)return; try{ const {PDFDocument}=PDFLib; doc=await PDFDocument.load(await f.arrayBuffer(),{ignoreEncryption:true}); pages=doc.getPageIndices().map(i=>({idx:i,rot:0})); render(); }catch(e){flash('Could not read PDF');} });
+  const render=()=>{ $('#ptlist',root).innerHTML=pages.map((p,i)=>`<div class="pagerow"><span class="pn">p.${p.idx+1}</span><span class="nm">rotation ${p.rot}°</span><button data-up="${i}" title="Move up">↑</button><button data-rot="${i}" title="Rotate 90°">⟳</button><button data-x="${i}" title="Delete">✕</button></div>`).join(''); $('#ptgo',root).disabled=!pages.length;
+    $$('[data-up]',root).forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[pages[i-1],pages[i]]=[pages[i],pages[i-1]];render();}});
+    $$('[data-rot]',root).forEach(b=>b.onclick=()=>{const i=+b.dataset.rot;pages[i].rot=(pages[i].rot+90)%360;render();});
+    $$('[data-x]',root).forEach(b=>b.onclick=()=>{pages.splice(+b.dataset.x,1);render();}); };
+  $('#ptgo',root).onclick=async()=>{ if(!doc){return;} try{ const {PDFDocument,degrees}=PDFLib; const out=await PDFDocument.create(); const copied=await out.copyPages(doc,pages.map(p=>p.idx)); copied.forEach((pg,i)=>{ if(pages[i].rot){ pg.setRotation(degrees(pages[i].rot)); } out.addPage(pg); }); const blob=new Blob([await out.save()],{type:'application/pdf'}); download('edited.pdf',blob,'application/pdf'); }catch(e){flash('Build failed: '+e.message);} };
+});
+T('img64','file','Image → Base64','Data URI for CSS / HTML embedding','image base64 data uri embed convert',root=>{
+  root.innerHTML=`${dropUI('i6','image/*','<b>Drop an image here</b><br><small>PNG, JPG, GIF, SVG, WebP</small>')}
+   <div id="i6prev" style="text-align:center;margin:12px 0"></div>
+   <div class="out mono"><div class="outhead"><span class="lbl" id="i6sz">Data URI</span>${copyBtn('#i6o')}</div><div id="i6o" style="word-break:break-all;max-height:160px;overflow:auto">Choose an image…</div></div>`;
+  wireDrop(root,'i6',fs=>{ const f=fs.find(f=>f.type.startsWith('image/')); if(!f)return; const r=new FileReader(); r.onload=()=>{ $('#i6o',root).textContent=r.result; $('#i6prev',root).innerHTML=`<img src="${r.result}" style="max-height:140px;border-radius:8px;border:1px solid var(--border)">`; $('#i6sz',root).textContent=`Data URI · ${fmt(r.result.length/1024,1)} KB`; }; r.readAsDataURL(f); });
+});
+T('imgresize','file','Image Resizer','Resize & re-encode images in-browser','image resize scale compress jpg png convert',root=>{
+  root.innerHTML=`${dropUI('ir','image/*','<b>Drop an image here</b><br><small>resize and download — nothing uploads</small>')}
+   <div id="irinfo" class="sub" style="margin:10px 0"></div>
+   <div class="row"><div class="field"><label>Width (px)</label><input class="inp" id="irw" type="number"></div><div class="field"><label>Height (px)</label><input class="inp" id="irh" type="number"></div></div>
+   <div class="chips" style="margin-bottom:12px"><span class="chip on" data-o="lock">Keep ratio</span><span class="chip" data-o="png">Output PNG</span></div>
+   <div id="irprev" style="text-align:center;margin:12px 0"></div>
+   <button class="btn" id="irdl" disabled>Resize & download</button>${DLNOTE}`;
+  let img=null,natW=0,natH=0,lock=true,png=false;
+  wireDrop(root,'ir',fs=>{ const f=fs.find(f=>f.type.startsWith('image/')); if(!f)return; const r=new FileReader(); r.onload=()=>{ img=new Image(); img.onload=()=>{ natW=img.width;natH=img.height; $('#irw',root).value=natW;$('#irh',root).value=natH; $('#irinfo',root).textContent=`Original: ${natW} × ${natH}px · ${fmt(f.size/1024,1)} KB`; $('#irprev',root).innerHTML=`<img src="${img.src}" style="max-height:160px;border-radius:8px;border:1px solid var(--border)">`; $('#irdl',root).disabled=false; }; img.src=r.result; }; r.readAsDataURL(f); });
+  $('#irw',root).addEventListener('input',()=>{ if(lock&&natW)$('#irh',root).value=Math.round(+$('#irw',root).value*natH/natW); });
+  $('#irh',root).addEventListener('input',()=>{ if(lock&&natH)$('#irw',root).value=Math.round(+$('#irh',root).value*natW/natH); });
+  $$('.chip',root).forEach(ch=>ch.onclick=()=>{ch.classList.toggle('on');if(ch.dataset.o==='lock')lock=ch.classList.contains('on');if(ch.dataset.o==='png')png=ch.classList.contains('on');});
+  $('#irdl',root).onclick=()=>{ if(!img)return; const w=+$('#irw',root).value,h=+$('#irh',root).value; const cv=document.createElement('canvas'); cv.width=w;cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h); cv.toBlob(b=>download(png?'resized.png':'resized.jpg',b,png?'image/png':'image/jpeg'),png?'image/png':'image/jpeg',0.92); };
+});
+
+/* ---------- render / routing ---------- */
+const byCat={}; TOOLS.forEach(t=>{ (byCat[t.cat]=byCat[t.cat]||[]).push(t); });
+$('#count').textContent=TOOLS.length;
+$('#search').placeholder=`Search ${TOOLS.length} tools…`;
+
+function buildList(filter=''){
+  const q=filter.trim().toLowerCase();
+  const list=$('#toollist'); list.innerHTML='';
+  let any=false;
+  Object.keys(CATS).forEach(cat=>{
+    const items=(byCat[cat]||[]).filter(t=> !q || t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q) || t.kw.includes(q) || t.kw.split(' ').some(k=>k.startsWith(q)) );
+    if(!items.length) return; any=true;
+    const sec=document.createElement('div'); sec.className='cat';
+    sec.innerHTML=`<div class="lbl">${CATS[cat]}</div>`;
+    items.forEach(t=>{ const b=document.createElement('button'); b.className='titem'+(t.id===current?' active':''); b.dataset.id=t.id; b.innerHTML=`<span class="ti">${ico(I[cat])}</span><span>${t.name}</span>`; b.onclick=()=>openTool(t.id); sec.appendChild(b); });
+    list.appendChild(sec);
+  });
+  if(!any) list.innerHTML='<div class="noresult">No tools match that search.</div>';
+}
+
+function showOverview(){
+  current=null; location.hash='';
+  $('#app').classList.remove('viewing');
+  $('#tooltitle').hidden=true;
+  buildList($('#search').value);
+  const cats=Object.keys(CATS);
+  let html=`<div class="ov-head"><h1>Toolbench</h1><p>${TOOLS.length} fast, offline utilities — calculators, converters, text and dev tools, generators and file helpers. Everything runs in your browser.</p></div>`;
+  html+=`<div class="ovtabs"><button class="ovtab on" data-f="all">All · ${TOOLS.length}</button>`+cats.map(c=>`<button class="ovtab" data-f="${c}">${CATS[c]} · ${(byCat[c]||[]).length}</button>`).join('')+`</div>`;
+  cats.forEach(cat=>{
+    html+=`<div class="ovcat" data-cat="${cat}"><div class="lbl">${CATS[cat]}</div><div class="grid">`;
+    (byCat[cat]||[]).forEach(t=>{ html+=`<button class="card" data-id="${t.id}"><span class="ci">${ico(I[cat])}</span><span class="cb"><b>${t.name}</b><small>${t.desc}</small></span></button>`; });
+    html+=`</div></div>`;
+  });
+  view.innerHTML=html;
+  $$('.card',view).forEach(c=>c.onclick=()=>openTool(c.dataset.id));
+  $$('.ovtab',view).forEach(tab=>tab.onclick=()=>{
+    $$('.ovtab',view).forEach(x=>x.classList.remove('on')); tab.classList.add('on');
+    const f=tab.dataset.f;
+    $$('.ovcat',view).forEach(sec=>{ sec.hidden = (f!=='all' && sec.dataset.cat!==f); });
+    $('#main').scrollTop=0;
+  });
+  $('.content').scrollTop=0; $('#main').scrollTop=0;
+}
+
+let current=null;
+function openTool(id){
+  const t=TOOLS.find(x=>x.id===id); if(!t){ showOverview(); return; }
+  clearIntervals();
+  current=id; location.hash=id;
+  $('#app').classList.add('viewing');
+  $('#tooltitle').hidden=false;
+  $('#tt-name').textContent=t.name; $('#tt-desc').textContent=t.desc;
+  view.innerHTML=''; const wrap=document.createElement('div'); wrap.className='pane'; view.appendChild(wrap);
+  try{ t.mount(wrap); }catch(e){ wrap.innerHTML='<div class="out err">This tool hit an error: '+esc(e.message)+'</div>'; }
+  buildList($('#search').value);
+  $('.content').scrollTop=0; $('#main').scrollTop=0;
+}
+
+// clean interval clearing that also cancels stopwatch RAF entries
+const _clear=clearIntervals;
+clearIntervals=function(){ while(intervals.length){ const x=intervals.pop(); if(x&&x.__raf)cancelAnimationFrame(x.__raf); else clearInterval(x); } };
+
+$('#search').addEventListener('input',e=>buildList(e.target.value));
+$('#back').onclick=showOverview;
+$('.brand').style.cursor='pointer'; $('.brand').onclick=showOverview;
+
+/* theme toggle */
+const themeBtn=$('#theme');
+function curTheme(){ return document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'); }
+function setTheme(t){ document.documentElement.setAttribute('data-theme',t); try{localStorage.setItem('tb-theme',t);}catch{} paintTheme(); }
+function paintTheme(){ themeBtn.innerHTML=ico(curTheme()==='dark'?I.sun:I.moon); }
+try{ const s=localStorage.getItem('tb-theme'); if(s)document.documentElement.setAttribute('data-theme',s); }catch{}
+themeBtn.onclick=()=>setTheme(curTheme()==='dark'?'light':'dark');
+paintTheme();
+
+/* boot */
+const initial=decodeURIComponent(location.hash.replace('#','')).trim();
+if(initial && TOOLS.find(t=>t.id===initial)) openTool(initial); else showOverview();
+window.addEventListener('hashchange',()=>{ const h=location.hash.replace('#','').trim(); if(!h) showOverview(); else if(h!==current) openTool(h); });
+</script>
